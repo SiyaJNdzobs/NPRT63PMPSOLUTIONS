@@ -172,6 +172,7 @@ export default function AdminDashboard() {
                         <th className="py-2.5 font-semibold">Rank Name</th>
                         <th className="py-2.5 font-semibold">Location</th>
                         <th className="py-2.5 font-semibold">Marshal ID</th>
+                        <th className="py-2.5 font-semibold">QR Poster</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -180,6 +181,16 @@ export default function AdminDashboard() {
                           <td className="py-3 font-semibold text-slate-800">{rank.rankName}</td>
                           <td className="py-3">{rank.city}, {rank.province}</td>
                           <td className="py-3 text-slate-400 text-xs">{rank.marshalId || "None"}</td>
+                          <td className="py-3">
+                            <a
+                              href={`/qr/print?rankId=${rank.rankId}&rankName=${encodeURIComponent(rank.rankName)}&city=${encodeURIComponent(rank.city)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 bg-[#1e3a5f] hover:bg-[#16304f] text-white text-xs font-bold px-3 py-1.5 rounded-lg transition"
+                            >
+                              🖨️ Print QR
+                            </a>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

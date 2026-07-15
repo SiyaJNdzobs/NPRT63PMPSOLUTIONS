@@ -1,45 +1,56 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/firebase-admin";
+import QRCode from "qrcode";
 
 export async function POST(request) {
   try {
-    const { rankId } = await request.json();
+    const { rankId, rankName, city } = await request.json();
 
-    if (!rankId) {
-      return NextResponse.json({ error: "Rank ID is required" }, { status: 400 });
+    if (!rankId || !rankName) {
+      return NextResponse.json(
+        { error: "rankId and rankName are required" },
+        { status: 400 }
+      );
     }
 
-    const rankSnap = await db.collection("ranks").doc(rankId).get();
-    if (!rankSnap.exists) {
-      return NextResponse.json({ error: "Rank not found" }, { status: 404 });
-    }
-    const rankData = rankSnap.data();
+    // Build the QR payload — a deep-link URL drivers scan to join the queue
+    const qrPayload = `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/queue/join?rankId=${rankId}&rankName=${encodeURIComponent(rankName)}`;
 
-    // Check if QR code already exists for this rank
-    const existingSnap = await db.collection("qrCodes").where("rankId", "==", rankId).get();
-    if (!existingSnap.empty) {
-      return NextResponse.json({
-        message: "QR code already exists for this rank",
-        qrCode: existingSnap.docs[0].data()
-      });
-    }
+    // Generate QR code as a base64 PNG
+    const qrCodeDataUrl = await QRCode.toDataURL(qrPayload, {
+      errorCorrectionLevel: "H",
+      width: 400,
+      margin: 2,
+      color: {
+        dark: "#1e3a5f",  // Navy blue matching the E-Rank brand
+        light: "#ffffff",
+      },
+    });
 
     const qrId = `qr-${rankId}`;
-    const newQR = {
+    const qrDocument = {
       qrId,
-      rankName: rankData.rankName,
       rankId,
-      qrCodeImage: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", // Base64 placeholder
+      rankName,
+      city: city || "",
+      qrPayload,
+      qrCodeImage: qrCodeDataUrl,
       isActive: true,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
 
-    await db.collection("qrCodes").doc(qrId).set(newQR);
+    // Upsert into the qrCodes collection
+    await db.collection("qrCodes").doc(qrId).set(qrDocument);
 
-    return NextResponse.json({ message: "QR code generated successfully", qrCode: newQR });
+    return NextResponse.json({
+      message: "QR code generated successfully",
+      qrCode: qrDocument,
+    });
   } catch (error) {
-    console.error("Generate QR code error:", error);
-    return NextResponse.json({ error: error.message || "Failed to generate QR code" }, { status: 500 });
+    console.error("QR generate error:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to generate QR code" },
+      { status: 500 }
+    );
   }
 }
-
