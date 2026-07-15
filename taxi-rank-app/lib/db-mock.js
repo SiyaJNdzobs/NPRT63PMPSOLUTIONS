@@ -56,6 +56,7 @@ if (!global.mockDatabase) {
   ];
 
   const seedAdmins = [
+    { uid: "admin-siyagmail", email: "siyajndzobs@gmail.com", fullName: "Siya J", role: "admin", createdAt: new Date().toISOString() },
     { uid: "admin-siya", email: "siya@taxirank.co.za", fullName: "Siya", role: "admin", createdAt: new Date().toISOString() },
     { uid: "admin-bron", email: "bron@taxirank.co.za", fullName: "Bron", role: "admin", createdAt: new Date().toISOString() },
     { uid: "admin-oara", email: "oara@taxirank.co.za", fullName: "Oara", role: "admin", createdAt: new Date().toISOString() },
@@ -87,7 +88,7 @@ if (!global.mockDatabase) {
       cellNumber: "0000000000",
       isActive: true,
       createdAt: a.createdAt,
-      password: "Mageza@25" // Plain password for mock Auth
+      password: a.email === "siyajndzobs@gmail.com" ? "Sasingenje@25" : "Mageza@25"
     });
   });
 
