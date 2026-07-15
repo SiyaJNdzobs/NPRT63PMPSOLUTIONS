@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -15,12 +15,14 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   // If already logged in, redirect to dashboard
-  if (user) {
-    const role = localStorage.getItem("role");
-    if (role) {
-      router.push(`/dashboard/${role}`);
+  useEffect(() => {
+    if (user) {
+      const role = localStorage.getItem("role");
+      if (role) {
+        router.push(`/dashboard/${role}`);
+      }
     }
-  }
+  }, [user, router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -42,12 +42,14 @@ export default function Register() {
   }, []);
 
   // If already logged in, redirect
-  if (user) {
-    const role = localStorage.getItem("role");
-    if (role) {
-      router.push(`/dashboard/${role}`);
+  useEffect(() => {
+    if (user) {
+      const role = localStorage.getItem("role");
+      if (role) {
+        router.push(`/dashboard/${role}`);
+      }
     }
-  }
+  }, [user, router]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
