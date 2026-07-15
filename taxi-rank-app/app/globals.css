@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+/* Smooth focus rings */
+* {
+  scroll-behavior: smooth;
+}
+
+input, select, textarea, button {
+  transition-property: border-color, box-shadow, background-color, color;
+  transition-duration: 150ms;
+}
