@@ -1,38 +1,74 @@
-# NPRT63
+# NPRT63PMPSOLUTIONS
 
-## NPRT63 - Project
+## Project Overview
 
-[![Code License](https://img.shields.io/badge/Code%20License-GPLv2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Follow%20%40iammelvink-blue.svg?style=social&logo=linkedin)](https://www.linkedin.com/in/iammelvink)
+NPRT63PMPSOLUTIONS is a modern digital taxi rank and queue management platform designed to improve the operation of taxi ranks through real-time queue management, passenger tracking, driver coordination, and operational reporting.
 
-## Overview
+The platform aims to digitize and streamline traditional taxi rank processes while preserving existing workflows used by marshals, drivers, and owners within the South African minibus taxi industry.
 
-This is the codebase produced for the Project course
+## Project Structure
 
-Written in **Placeholder**
-
-1. Methodologies/Project Management:
-
-   - Agile
-
-2. Coding Practices:
-
-   - OOP (Object Oriented Programming)
-   - MVC (Model View Controller)
-
-3. Programming Languages/Frameworks:
-
-   - Placeholder
+```
+NPRT63PMPSOLUTIONS/ (Your Repository Root)
+├── supabase/                   <-- Your local database configurations
+│   ├── config.toml             <-- Supabase local settings
+│   └── migrations/             <-- SQL initialization files (table setups, schemas)
+│
+├── taxi-rank-app/              <-- Your unified mobile-first Expo frontend application
+│   ├── App.js                  <-- App entry point
+│   ├── app.json                <-- Expo configurations
+│   ├── package.json            <-- Project library dependencies
+│   │
+│   ├── components/             <-- Reusable layout blocks (buttons, modal windows)
+│   ├── context/
+│   │   └── AuthContext.js      <-- Handles Supabase unified login & session tokens
+│   │
+│   ├── lib/
+│   │   └── supabaseClient.js   <-- Free connection hub connecting Expo to Supabase
+│   │
+│   └── screens/                <-- User-Specific UI layout views
+│       ├── LoginScreen.js      <-- The unified 3-field login interface
+│       ├── AdminDashboard.js   <-- Rank setup & printable QR sign download panels
+│       ├── OwnerDashboard.js   <-- Coupled vehicle setup & on-the-spot password views
+│       ├── MarshalDashboard.js <-- Long-distance manifests & public updates broadcasters
+│       ├── DriverDashboard.js  <-- Position checkers & big tactile depart buttons
+│       └── PassengerHome.js    <-- Info display board, AI context guide, & late pooling forms
+│
+├── .gitignore                  <-- Blocks internal secret keys from pushing to public web
+├── LICENSE                     <-- Project licensing terms
+└── README.md                   <-- This file
+```
 
 ## Instructions
 
-1. Make sure you have these installed
+1. Make sure you have these installed:
+   - Node.js and npm
+   - Expo CLI
+   - Supabase CLI (optional, for local development)
 
-2. Clone `ONLY THE LATEST COMMIT` of this repository into your local machine using the terminal (mac) or
-   [Gitbash (PC)](https://git-scm.com/download/win 'Gitbash (PC)') `to save storage space`
+2. Clone this repository into your local machine:
 
    ```sh
-   git clone https://github.com/iammelvink/NPRT63.git --depth=1
+   git clone https://github.com/SiyaJNdzobs/NPRT63PMPSOLUTIONS.git
+   ```
+
+3. Install dependencies:
+
+   ```sh
+   cd taxi-rank-app
+   npm install
+   ```
+
+4. Configure Supabase:
+   - Create a Supabase project at https://supabase.com
+   - Copy your project URL and anon key
+   - Update `lib/supabaseClient.js` with your credentials
+   - Set up database tables using the migrations in `supabase/migrations/`
+
+5. Run the app:
+
+   ```sh
+   npm start
    ```
 
 ## Author(s)
