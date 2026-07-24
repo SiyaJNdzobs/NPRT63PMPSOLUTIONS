@@ -1,0 +1,1 @@
+-- No-op: schema was applied directly via SQL Editor due to local Docker/WSL environment limitations. See 20260724121459_init_schema.sql for the authoritative schema record.
