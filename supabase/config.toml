@@ -423,3 +423,25 @@ entrypoint = "./functions/generate-driver-pin/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/generate-driver-pin/*.html" ]
+
+[functions.generate-qr-token]
+enabled = true
+verify_jwt = false
+import_map = "./functions/generate-qr-token/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/generate-qr-token/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/generate-qr-token/*.html" ]
+
+[functions.confirm-late-trip]
+enabled = true
+verify_jwt = false
+import_map = "./functions/confirm-late-trip/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/confirm-late-trip/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/confirm-late-trip/*.html" ]
