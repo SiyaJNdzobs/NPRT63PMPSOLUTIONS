@@ -107,6 +107,7 @@ export default function PassengerHome({ navigation }) {
           .insert({
             destination: lpDest.trim(),
             rank_id: selectedRank?.id ?? null,
+            base_fare: 25.00,
             passenger_cells: [lpCell.trim()],
           })
           .select('id')

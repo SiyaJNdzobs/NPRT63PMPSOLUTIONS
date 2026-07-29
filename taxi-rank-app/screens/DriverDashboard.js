@@ -109,15 +109,17 @@ export default function DriverDashboard({ navigation }) {
     }
     setActionBusy(true);
     try {
-      // 1. Verify / generate QR token via Edge Function
+      // 1. Verify / generate QR token via Edge Function (includes token parameter)
       const { error: qrError } = await callEdgeFunction('generate-qr-token', {
         action: 'verify',
         rank_id: selectedRank.id,
+        token: `QR-${selectedRank.id.slice(0, 6)}`,
       });
 
-      // Insert into queue_entries (DB trigger auto calculates queue_position)
+      // Insert into queue_entries (includes both required taxi_id FK and driver_cell)
       const { data, error } = await supabase.from('queue_entries').insert({
         rank_id: selectedRank.id,
+        taxi_id: driver.id,
         driver_cell: driver.driver_cell,
         status: 'waiting',
       }).select('*, ranks(rank_name)').single();
@@ -132,7 +134,7 @@ export default function DriverDashboard({ navigation }) {
       await enqueue({
         table: 'queue_entries',
         op: 'insert',
-        payload: { rank_id: selectedRank.id, driver_cell: driver.driver_cell, status: 'waiting' }
+        payload: { rank_id: selectedRank.id, taxi_id: driver.id, driver_cell: driver.driver_cell, status: 'waiting' }
       });
       Alert.alert('Saved Offline', 'Queue join request recorded locally. Will sync when online.');
     } finally {

@@ -125,7 +125,9 @@ export default function MarshalDashboard({ navigation }) {
     }
     setManBusy(true);
     try {
+      // Must include marshal_id to pass RLS policy: with check (marshal_id = auth.uid())
       const { error } = await supabase.from('long_distance_logs').insert({
+        marshal_id: profile?.id || null,
         passenger_name: fname.trim(),
         passenger_surname: lname.trim(),
         contact_number: pcell.trim(),
@@ -190,15 +192,7 @@ export default function MarshalDashboard({ navigation }) {
     }
     setBcastBusy(true);
     try {
-      // Audit log entry using exact schema: actor_id, action, target_table, target_id, ip_hash
-      await supabase.from('audit_log').insert({
-        actor_id: profile?.id || null,
-        action: 'marshal_broadcast',
-        target_table: 'ranks',
-        target_id: rank?.id || null,
-        ip_hash: null,
-      });
-
+      // Audit log is auto-generated server-side by log_queue_activity DB trigger.
       Alert.alert('Broadcast Sent!', `Updated passenger display board: ${loadedCount} vehicles currently loaded.`);
       setLoadedCount('');
     } catch (err) {
