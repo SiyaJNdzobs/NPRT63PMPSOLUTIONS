@@ -1,72 +1,72 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-serve(async (req) => {
-  try {
-    const { full_name, cell_number, rank_id } = await req.json();
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
-    if (!/^0[6-8][0-9]{8}$/.test(cell_number)) {
-      return new Response(JSON.stringify({ error: "Invalid South African cell number" }), {
-        headers: { "Content-Type": "application/json" },
-        status: 400,
-      });
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    const { full_name, cell_number, password } = await req.json();
+
+    if (!full_name || !cell_number || !password) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing required fields." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const supabaseAdmin = createClient(
-      "https://xlxxvrmbjdjchjwrzwcl.supabase.co",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    const syntheticEmail = `${cell_number}@marshal.erank.local`;
-    const tempPassword = `Erank${cell_number.slice(-4)}!`;
+    const email = `${cell_number.trim()}@erank.app`;
 
-    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: syntheticEmail,
-      password: tempPassword,
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
       email_confirm: true,
+      user_metadata: { full_name, cell_number, role: "marshal", force_reset: true },
     });
 
     if (authError) {
-      return new Response(JSON.stringify({ error: authError.message }), {
-        headers: { "Content-Type": "application/json" },
-        status: 400,
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: authError.message }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    const { error: insertError } = await supabaseAdmin.from("users").insert({
-      id: authUser.user.id,
-      full_name,
-      cell_number,
+    const { error: dbError } = await supabaseAdmin.from("users").insert({
+      id: authData.user.id,
+      full_name: full_name.trim(),
+      cell_number: cell_number.trim(),
+      email,
       role: "marshal",
     });
 
-    if (insertError) {
-      return new Response(JSON.stringify({ error: insertError.message }), {
-        headers: { "Content-Type": "application/json" },
-        status: 400,
-      });
+    if (dbError) {
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      return new Response(
+        JSON.stringify({ success: false, error: dbError.message }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    const { error: rankError } = await supabaseAdmin
-      .from("ranks")
-      .update({ marshal_id: authUser.user.id })
-      .eq("id", rank_id);
-
-    if (rankError) {
-      return new Response(JSON.stringify({ error: rankError.message }), {
-        headers: { "Content-Type": "application/json" },
-        status: 400,
-      });
-    }
-
-    return new Response(JSON.stringify({ success: true, temp_password: tempPassword }), {
-      headers: { "Content-Type": "application/json" },
-      status: 200,
-    });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      headers: { "Content-Type": "application/json" },
-      status: 400,
-    });
+    return new Response(
+      JSON.stringify({ success: true, user_id: authData.user.id }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (err: any) {
+    return new Response(
+      JSON.stringify({ success: false, error: err.message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 });
