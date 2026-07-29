@@ -71,7 +71,7 @@ export default function MarshalDashboard({ navigation }) {
   const fetchQueue = async (rankId) => {
     const { data } = await supabase
       .from('queue_entries')
-      .select('id, queue_position, status, taxis(id, registration_number, driver_name, driver_cell)')
+      .select('id, queue_position, status, driver_cell')
       .eq('rank_id', rankId)
       .in('status', ['waiting', 'loading'])
       .order('queue_position');
@@ -98,7 +98,7 @@ export default function MarshalDashboard({ navigation }) {
   const handleDispatch = async (entry) => {
     Alert.alert(
       'Confirm Dispatch',
-      `Dispatch vehicle ${entry.taxis?.registration_number}?`,
+      `Dispatch vehicle for driver ${entry.driver_cell}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -106,7 +106,7 @@ export default function MarshalDashboard({ navigation }) {
           onPress: async () => {
             const { error } = await supabase
               .from('queue_entries')
-              .update({ status: 'departed', departed_at: new Date().toISOString() })
+              .update({ status: 'departed' })
               .eq('id', entry.id);
 
             if (error) Alert.alert('Error', error.message);
@@ -126,12 +126,11 @@ export default function MarshalDashboard({ navigation }) {
     setManBusy(true);
     try {
       const { error } = await supabase.from('long_distance_logs').insert({
-        passenger_name: `${fname.trim()} ${lname.trim()}`,
-        passenger_cell: pcell.trim(),
+        passenger_name: fname.trim(),
+        passenger_surname: lname.trim(),
+        contact_number: pcell.trim(),
         next_of_kin_name: nokName.trim(),
-        next_of_kin_cell: nokCell.trim(),
-        rank_id: rank?.id || null,
-        recorded_by: profile?.id || null,
+        next_of_kin_contact: nokCell.trim(),
       });
 
       if (error) throw error;
@@ -191,11 +190,13 @@ export default function MarshalDashboard({ navigation }) {
     }
     setBcastBusy(true);
     try {
-      // Audit log entry or rank update broadcast
+      // Audit log entry using exact schema: actor_id, action, target_table, target_id, ip_hash
       await supabase.from('audit_log').insert({
+        actor_id: profile?.id || null,
         action: 'marshal_broadcast',
-        user_id: profile?.id,
-        details: { rank_id: rank?.id, loaded_count: parseInt(loadedCount, 10) }
+        target_table: 'ranks',
+        target_id: rank?.id || null,
+        ip_hash: null,
       });
 
       Alert.alert('Broadcast Sent!', `Updated passenger display board: ${loadedCount} vehicles currently loaded.`);
@@ -256,9 +257,8 @@ export default function MarshalDashboard({ navigation }) {
                       <Text style={styles.posText}>#{entry.queue_position}</Text>
                     </View>
                     <View>
-                      <Text style={styles.regText}>{entry.taxis?.registration_number}</Text>
-                      <Text style={styles.driverText}>{entry.taxis?.driver_name}</Text>
-                      <Text style={styles.cellText}>{entry.taxis?.driver_cell}</Text>
+                      <Text style={styles.regText}>Driver: {entry.driver_cell}</Text>
+                      <Text style={styles.cellText}>Status: {entry.status}</Text>
                     </View>
                   </View>
 

@@ -55,10 +55,10 @@ export default function DriverDashboard({ navigation }) {
     if (!driver) return;
     const { data } = await supabase
       .from('queue_entries')
-      .select('id, joined_at, departed_at, status, ranks(rank_name)')
-      .eq('taxi_id', driver.id)
+      .select('id, scan_timestamp, status, ranks(rank_name)')
+      .eq('driver_cell', driver.driver_cell)
       .eq('status', 'departed')
-      .order('departed_at', { ascending: false })
+      .order('scan_timestamp', { ascending: false })
       .limit(5);
     if (data) setHistory(data);
   };
@@ -69,7 +69,7 @@ export default function DriverDashboard({ navigation }) {
     const { data } = await supabase
       .from('queue_entries')
       .select('id, queue_position, status, rank_id, ranks(rank_name)')
-      .eq('taxi_id', driver.id)
+      .eq('driver_cell', driver.driver_cell)
       .in('status', ['waiting', 'loading'])
       .maybeSingle();
 
@@ -118,7 +118,7 @@ export default function DriverDashboard({ navigation }) {
       // Insert into queue_entries (DB trigger auto calculates queue_position)
       const { data, error } = await supabase.from('queue_entries').insert({
         rank_id: selectedRank.id,
-        taxi_id: driver.id,
+        driver_cell: driver.driver_cell,
         status: 'waiting',
       }).select('*, ranks(rank_name)').single();
 
@@ -132,7 +132,7 @@ export default function DriverDashboard({ navigation }) {
       await enqueue({
         table: 'queue_entries',
         op: 'insert',
-        payload: { rank_id: selectedRank.id, taxi_id: driver.id, status: 'waiting' }
+        payload: { rank_id: selectedRank.id, driver_cell: driver.driver_cell, status: 'waiting' }
       });
       Alert.alert('Saved Offline', 'Queue join request recorded locally. Will sync when online.');
     } finally {
@@ -149,7 +149,6 @@ export default function DriverDashboard({ navigation }) {
         .from('queue_entries')
         .update({
           status: 'departed',
-          departed_at: new Date().toISOString(),
         })
         .eq('id', activeEntry.id);
 
@@ -163,7 +162,7 @@ export default function DriverDashboard({ navigation }) {
       await enqueue({
         table: 'queue_entries',
         op: 'update',
-        payload: { status: 'departed', departed_at: new Date().toISOString() },
+        payload: { status: 'departed' },
         match: { id: activeEntry.id }
       });
       setActiveEntry(null);
@@ -274,7 +273,7 @@ export default function DriverDashboard({ navigation }) {
                       <View>
                         <Text style={styles.histRank}>{item.ranks?.rank_name || 'Trip'}</Text>
                         <Text style={styles.histTime}>
-                          {item.departed_at ? new Date(item.departed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                          {item.scan_timestamp ? new Date(item.scan_timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                         </Text>
                       </View>
                       <View style={styles.histBadge}>

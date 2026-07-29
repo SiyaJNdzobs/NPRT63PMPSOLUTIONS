@@ -54,7 +54,7 @@ export default function PassengerHome({ navigation }) {
     setLoadingQ(true);
 
     supabase.from('queue_entries')
-      .select('id, queue_position, status, taxis(registration_number, driver_name)')
+      .select('id, queue_position, status, driver_cell')
       .eq('rank_id', selectedRank.id)
       .in('status', ['waiting', 'loading'])
       .order('queue_position')
@@ -65,7 +65,7 @@ export default function PassengerHome({ navigation }) {
           filter: `rank_id=eq.${selectedRank.id}` },
         () => {
           supabase.from('queue_entries')
-            .select('id, queue_position, status, taxis(registration_number, driver_name)')
+            .select('id, queue_position, status, driver_cell')
             .eq('rank_id', selectedRank.id)
             .in('status', ['waiting', 'loading'])
             .order('queue_position')
@@ -84,16 +84,39 @@ export default function PassengerHome({ navigation }) {
     }
     setLpBusy(true);
     try {
-      const { data, error } = await supabase.from('late_trip_bookings').insert({
-        destination: lpDest.trim(),
-        passenger_cell: lpCell.trim(),
-        rank_id: selectedRank?.id ?? null,
-      }).select('id').single();
+      // Query existing booking for this destination & rank
+      const { data: existing } = await supabase
+        .from('late_trip_bookings')
+        .select('*')
+        .eq('destination', lpDest.trim())
+        .eq('rank_id', selectedRank?.id ?? null)
+        .eq('is_confirmed', false)
+        .maybeSingle();
 
-      if (error) throw error;
+      let bookingId;
+      if (existing) {
+        bookingId = existing.id;
+        const updatedCells = [...(existing.passenger_cells || []), lpCell.trim()];
+        await supabase
+          .from('late_trip_bookings')
+          .update({ passenger_cells: updatedCells })
+          .eq('id', existing.id);
+      } else {
+        const { data: newBooking, error } = await supabase
+          .from('late_trip_bookings')
+          .insert({
+            destination: lpDest.trim(),
+            rank_id: selectedRank?.id ?? null,
+            passenger_cells: [lpCell.trim()],
+          })
+          .select('id')
+          .single();
+        if (error) throw error;
+        bookingId = newBooking.id;
+      }
 
       // Try confirming (threshold check in Edge Function)
-      await callEdgeFunction('confirm-late-trip', { booking_id: data.id });
+      await callEdgeFunction('confirm-late-trip', { booking_id: bookingId });
 
       setLpDest(''); setLpCell('');
       Alert.alert('Booked!', "You're on the list. We'll notify you once 5 passengers join.");
@@ -134,8 +157,7 @@ export default function PassengerHome({ navigation }) {
           <Text style={styles.queueNum}>{item.queue_position}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.queueReg}>{item.taxis?.registration_number}</Text>
-          <Text style={styles.queueDriver}>{item.taxis?.driver_name}</Text>
+          <Text style={styles.queueReg}>Driver: {item.driver_cell}</Text>
         </View>
         <View style={styles.queueRight}>
           <Text style={styles.queueStatus}>{item.status}</Text>
