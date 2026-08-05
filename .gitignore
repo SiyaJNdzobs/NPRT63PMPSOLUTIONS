@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Expo
+.expo/
+**/.expo/
+.expo-shared/
+**/.expo-shared/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Supabase
+supabase/.branches
+supabase/.temp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE & Build files
+.vscode/
+.idea/
+dist/
+build/
