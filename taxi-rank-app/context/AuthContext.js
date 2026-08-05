@@ -215,7 +215,7 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider value={{
       session, profile, driver, loading, forceReset,
-      loginAdmin, loginStaff, loginDriver,
+      login: loginStaff, loginAdmin, loginStaff, loginDriver,
       registerOwner,
       completePasswordReset, completePINReset,
       logout,

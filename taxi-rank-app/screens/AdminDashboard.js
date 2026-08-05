@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
 
   revRank: { fontSize: Typography.size.md, fontWeight: Typography.weight.bold, color: Colors.textPrimary },
   revCat: { fontSize: Typography.size.xs, color: Colors.accent },
-  revComment: { fontSize: Typography.size.sm, color: Colors.textSecondary, italic: true },
+  revComment: { fontSize: Typography.size.sm, color: Colors.textSecondary, fontStyle: 'italic' },
   respBox: { backgroundColor: Colors.bgBase, padding: Spacing.sm, borderRadius: Radius.sm, marginTop: 4 },
   respLabel: { fontSize: Typography.size.xs, color: Colors.accent, fontWeight: Typography.weight.bold },
   respText: { fontSize: Typography.size.xs, color: Colors.textPrimary },
