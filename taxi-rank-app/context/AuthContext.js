@@ -52,6 +52,9 @@ export const AuthProvider = ({ children }) => {
         setProfile(p);
         if (s.user.user_metadata?.force_reset) setForceReset(true);
       }
+    }).catch((err) => {
+      console.warn('[Auth] getSession error:', err?.message || err);
+    }).finally(() => {
       setLoading(false);
     });
 
