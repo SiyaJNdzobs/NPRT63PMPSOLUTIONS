@@ -15,6 +15,7 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
 import SignInScreen           from './screens/SignInScreen';
@@ -28,13 +29,12 @@ import { Colors }            from './lib/theme';
 
 const Stack = createStackNavigator();
 
-// Header options for role dashboards
 const dashboardOptions = (title) => ({
   title,
   headerStyle: { backgroundColor: Colors.bgBase },
   headerTintColor: Colors.textPrimary,
   headerTitleStyle: { fontWeight: 'bold' },
-  headerBackVisible: false, // Prevent back navigation to login
+  headerBackVisible: false,
 });
 
 function LoadingScreen() {
@@ -46,16 +46,14 @@ function LoadingScreen() {
 }
 
 function RootNavigator() {
-  const { session, profile, driver, loading, forceReset } = useAuth();
+  const { profile, driver, loading, forceReset } = useAuth();
 
   if (loading) return <LoadingScreen />;
 
-  // 1. Mandatory First-Login Credential Reset Guard
   if (forceReset) {
     return <SetPermanentCredential />;
   }
 
-  // Determine active role
   const role = profile?.role || (driver ? 'driver' : null);
 
   return (
@@ -65,13 +63,8 @@ function RootNavigator() {
         initialRouteName={role ? getDashboardName(role) : "PassengerHome"}
         screenOptions={{ headerShown: false }}
       >
-        {/* PUBLIC PASSENGER LANDING */}
         <Stack.Screen name="PassengerHome" component={PassengerHome} />
-
-        {/* AUTH SIGN IN */}
         <Stack.Screen name="SignIn" component={SignInScreen} />
-
-        {/* ROLE DASHBOARDS */}
         <Stack.Screen
           name="AdminDashboard"
           component={AdminDashboard}
@@ -109,9 +102,11 @@ function getDashboardName(role) {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <RootNavigator />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 
