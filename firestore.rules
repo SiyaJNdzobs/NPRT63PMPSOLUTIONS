@@ -1,0 +1,10 @@
+﻿rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // TODO: implement role-based security rules.
+    // For now, deny all reads and writes (safe default for dev).
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

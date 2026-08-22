@@ -1,0 +1,53 @@
+﻿name: taxi_ops
+description: Taxi Operations Platform — five-role cross-platform app backed by Firebase.
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+  flutter: '>=3.22.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ── Firebase core ────────────────────────────────────────────────────────────
+  firebase_core: ^3.6.0
+  cloud_firestore: ^5.4.4
+  cloud_functions: ^5.1.3
+  firebase_storage: ^12.3.3
+  firebase_messaging: ^15.1.3
+
+  # ── Auth / secure storage ─────────────────────────────────────────────────────
+  flutter_secure_storage: ^9.2.2    # store session token post custom-auth login
+  shared_preferences: ^2.3.2
+
+  # ── Maps & location ──────────────────────────────────────────────────────────
+  google_maps_flutter: ^2.9.0
+  geolocator: ^13.0.1
+  permission_handler: ^11.3.1
+
+  # ── QR code ──────────────────────────────────────────────────────────────────
+  qr_flutter: ^4.1.0                # QR generation (rank QR poster)
+  # mobile_scanner is mobile-only; import conditionally in driver/qr_scan_page.dart
+  mobile_scanner: ^6.0.0
+
+  # ── Excel import/export ───────────────────────────────────────────────────────
+  excel: ^4.0.6                     # parse/generate .xlsx files
+  file_picker: ^8.1.2               # pick files from device storage
+
+  # ── UI / utilities ───────────────────────────────────────────────────────────
+  intl: ^0.19.0
+  path_provider: ^2.1.4
+  url_launcher: ^6.3.0
+  share_plus: ^10.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  # TODO: add assets (fonts, images) here as needed
+  # assets:
+  #   - assets/images/
