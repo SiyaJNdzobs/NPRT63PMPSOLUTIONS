@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bus, AlertTriangle, MapPin, Loader2, Plus, Camera } from "lucide-react";
+import { Bus, AlertTriangle, MapPin, Loader2, Camera } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -20,8 +20,6 @@ export default function DriverDashboard() {
   const [token, setToken] = useState("");
   const [result, setResult] = useState(null);
   const [sosOpen, setSosOpen] = useState(false);
-  const [departOpen, setDepartOpen] = useState(false);
-  const [pax, setPax] = useState([{ name: "", contact: "", destination: "" }]);
   const [busy, setBusy] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
@@ -69,22 +67,12 @@ export default function DriverDashboard() {
   const doDepart = async () => {
     setBusy(true);
     try {
-      const payload = status?.long_distance
-        ? { long_distance_passengers: pax.filter((p) => p.name.trim()) }
-        : {};
-      const { data } = await api.post("/driver/depart", payload);
-      setDepartOpen(false);
+      const { data } = await api.post("/driver/depart", {});
       setResult({ type: "success", title: "Departed", message: `Trip recorded. Revenue R${data.revenue} added to owner totals.` });
-      setPax([{ name: "", contact: "", destination: "" }]);
       refresh();
     } catch (e) {
       setResult({ type: "error", title: "Cannot depart", message: apiError(e) });
     } finally { setBusy(false); }
-  };
-
-  const onDepartClick = () => {
-    if (status?.long_distance) setDepartOpen(true);
-    else doDepart();
   };
 
   const sendSos = async () => {
@@ -177,14 +165,30 @@ export default function DriverDashboard() {
         )}
 
         <div className="grid grid-cols-1 gap-3">
-          <Button
-            onClick={onDepartClick}
-            disabled={!inQueue || busy}
-            data-testid="depart-btn"
-            className="h-14 text-base bg-primary text-black hover:bg-primary/90 disabled:opacity-40"
-          >
-            DEPART
-          </Button>
+          {inQueue && status?.long_distance ? (
+            <Card className="bg-[#181F2C] border-amber-500/30 p-4 rounded-xl" data-testid="driver-ld-control-card">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                  <Bus size={20} />
+                </div>
+                <div>
+                  <div className="font-semibold text-white text-sm">Long-Distance Trip Control</div>
+                  <div className="text-xs text-slate-300 mt-0.5">
+                    Your rank marshal will capture the passenger manifest and depart the taxi on your behalf when full.
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ) : (
+            <Button
+              onClick={doDepart}
+              disabled={!inQueue || busy}
+              data-testid="depart-btn"
+              className="h-14 text-base bg-primary text-black hover:bg-primary/90 disabled:opacity-40"
+            >
+              DEPART
+            </Button>
+          )}
           <Button
             onClick={() => setSosOpen(true)}
             data-testid="sos-btn"
@@ -219,34 +223,6 @@ export default function DriverDashboard() {
             <Button variant="outline" onClick={() => setSosOpen(false)} className="border-[#334155] text-slate-200">Cancel</Button>
             <Button onClick={sendSos} disabled={busy} data-testid="sos-confirm-btn" className="bg-red-600 hover:bg-red-700 text-white">
               {busy ? "Sending…" : "Send SOS now"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Long distance depart capture */}
-      <Dialog open={departOpen} onOpenChange={setDepartOpen}>
-        <DialogContent className="bg-[#181F2C] border-[#263144] max-w-lg" data-testid="depart-dialog">
-          <DialogHeader>
-            <DialogTitle className="text-white font-heading">Capture long-distance passengers</DialogTitle>
-            <DialogDescription className="text-slate-400">Required before departing on a long-distance route.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 max-h-[50vh] overflow-auto">
-            {pax.map((p, i) => (
-              <div key={i} className="grid grid-cols-3 gap-2">
-                <Input placeholder="Name" value={p.name} onChange={(e) => { const c = [...pax]; c[i].name = e.target.value; setPax(c); }} data-testid={`pax-name-${i}`} className="bg-[#0A0D14] border-[#263144] text-white" />
-                <Input placeholder="Contact" value={p.contact} onChange={(e) => { const c = [...pax]; c[i].contact = e.target.value; setPax(c); }} data-testid={`pax-contact-${i}`} className="bg-[#0A0D14] border-[#263144] text-white" />
-                <Input placeholder="Destination" value={p.destination} onChange={(e) => { const c = [...pax]; c[i].destination = e.target.value; setPax(c); }} data-testid={`pax-dest-${i}`} className="bg-[#0A0D14] border-[#263144] text-white" />
-              </div>
-            ))}
-            <Button variant="outline" size="sm" onClick={() => setPax([...pax, { name: "", contact: "", destination: "" }])} data-testid="add-pax-btn" className="border-[#334155] text-slate-200 gap-1">
-              <Plus size={14} /> Add passenger
-            </Button>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDepartOpen(false)} className="border-[#334155] text-slate-200">Cancel</Button>
-            <Button onClick={doDepart} disabled={busy || !pax.some((p) => p.name.trim())} data-testid="confirm-depart-btn" className="bg-primary text-black hover:bg-primary/90">
-              {busy ? "Departing…" : "Confirm & depart"}
             </Button>
           </DialogFooter>
         </DialogContent>

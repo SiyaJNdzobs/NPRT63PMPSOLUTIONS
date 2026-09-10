@@ -58,6 +58,13 @@ async def queue_snapshot(rank_name: str):
     entries = await db.queue.find({'rank_name': rank_name}, PROJ).sort('joined_at', 1).to_list(500)
     for i, e in enumerate(entries):
         e['position'] = i + 1
+        if e.get('long_distance') and not e.get('long_distance_passengers'):
+            req = await db.long_distance_requests.find_one(
+                {'$or': [{'queue_id': e.get('id')}, {'taxi_registration': e.get('taxi_registration'), 'status': 'pending'}]},
+                PROJ
+            )
+            if req and req.get('passengers'):
+                e['long_distance_passengers'] = req['passengers']
     return entries
 
 
@@ -157,8 +164,15 @@ class JoinIn(BaseModel):
 
 class LongPassenger(BaseModel):
     name: str
-    contact: str
-    destination: str
+    contact: Optional[str] = ""
+    destination: Optional[str] = ""
+    kin_name: Optional[str] = ""
+    kin_contact: Optional[str] = ""
+
+
+class LongDistanceSaveIn(BaseModel):
+    registration: str
+    passengers: List[LongPassenger]
 
 
 class DepartIn(BaseModel):
@@ -574,8 +588,42 @@ async def marshal_queue_add(body: QueueAddIn, user=Depends(marshal_dep)):
              'long_distance': is_long_distance(taxi['route']),
              'status': 'waiting', 'joined_at': now_iso(), 'added_by': 'marshal'}
     await db.queue.insert_one(entry)
+    # If this is a long‑distance route, create a pending long‑distance request linked to the queue entry
+    if entry['long_distance']:
+        request_doc = {
+            'id': str(uuid.uuid4()),
+            'queue_id': entry['id'],
+            'taxi_registration': taxi['registration'],
+            'rank_name': taxi['rank_name'],
+            'driver_name': taxi.get('driver_name') or 'Driver',
+            'route': taxi['route'],
+            'seat_count': taxi['seats'],
+            'passengers': [],
+            'status': 'pending',
+            'created_at': now_iso()
+        }
+        await db.long_distance_requests.insert_one(request_doc)
     await db.taxis.update_one({'id': taxi['id']}, {'$set': {'active_queue': True}})
     return {'ok': True}
+
+
+@api.post("/marshal/long-distance/save")
+async def marshal_save_manifest(body: LongDistanceSaveIn, user=Depends(marshal_dep)):
+    reg = body.registration.strip()
+    entry = await db.queue.find_one({'taxi_registration': {'$regex': f'^{reg}$', '$options': 'i'},
+                                     'rank_name': user['rank_name']})
+    if not entry:
+        raise HTTPException(status_code=400, detail="That taxi is not currently in your queue.")
+    passengers = [p.dict() for p in body.passengers if p.name.strip()]
+    await db.queue.update_one(
+        {'id': entry['id']},
+        {'$set': {'long_distance_passengers': passengers}}
+    )
+    await db.long_distance_requests.update_many(
+        {'taxi_registration': {'$regex': f'^{reg}$', '$options': 'i'}, 'status': 'pending'},
+        {'$set': {'passengers': passengers, 'updated_at': now_iso()}}
+    )
+    return {'ok': True, 'count': len(passengers), 'passengers': passengers}
 
 
 @api.post("/marshal/queue/depart")
@@ -585,7 +633,17 @@ async def marshal_queue_depart(body: MarshalDepartIn, user=Depends(marshal_dep))
                                      'rank_name': user['rank_name']})
     if not entry:
         raise HTTPException(status_code=400, detail="That taxi is not in your queue.")
-    long_pax = [p.dict() for p in (body.long_distance_passengers or [])]
+    long_pax = [p.dict() for p in (body.long_distance_passengers or []) if p.name.strip()]
+    if not long_pax and entry.get('long_distance_passengers'):
+        long_pax = entry.get('long_distance_passengers')
+    if not long_pax and entry.get('long_distance'):
+        req = await db.long_distance_requests.find_one(
+            {'taxi_registration': {'$regex': f'^{reg}$', '$options': 'i'}, 'status': 'pending'},
+            sort=[('created_at', -1)]
+        )
+        if req and req.get('passengers'):
+            long_pax = req.get('passengers')
+
     if entry.get('long_distance') and not long_pax:
         raise HTTPException(status_code=400,
                             detail="Capture long-distance passenger details before departing.")
@@ -600,6 +658,10 @@ async def marshal_queue_depart(body: MarshalDepartIn, user=Depends(marshal_dep))
     await db.queue.delete_one({'id': entry['id']})
     await db.taxis.update_one({'registration': entry['taxi_registration']},
                               {'$set': {'active_queue': False}})
+    await db.long_distance_requests.update_many(
+        {'taxi_registration': {'$regex': f'^{reg}$', '$options': 'i'}, 'status': 'pending'},
+        {'$set': {'status': 'departed', 'passengers': long_pax, 'departed_at': now_iso()}}
+    )
     return {'ok': True, 'revenue': revenue}
 
 
@@ -714,6 +776,20 @@ async def driver_join(body: JoinIn, user=Depends(driver_dep)):
              'long_distance': is_long_distance(taxi['route']),
              'status': 'waiting', 'joined_at': now_iso(), 'added_by': 'driver'}
     await db.queue.insert_one(entry)
+    if entry['long_distance']:
+        request_doc = {
+            'id': str(uuid.uuid4()),
+            'queue_id': entry['id'],
+            'taxi_registration': taxi['registration'],
+            'rank_name': taxi['rank_name'],
+            'driver_name': user['full_name'],
+            'route': taxi['route'],
+            'seat_count': taxi['seats'],
+            'passengers': [],
+            'status': 'pending',
+            'created_at': now_iso()
+        }
+        await db.long_distance_requests.insert_one(request_doc)
     await db.taxis.update_one({'id': taxi['id']}, {'$set': {'active_queue': True}})
     return {'ok': True}
 
@@ -724,7 +800,9 @@ async def driver_depart(body: DepartIn, user=Depends(driver_dep)):
     entry = await db.queue.find_one({'taxi_registration': taxi['registration']}) if taxi else None
     if not entry:
         raise HTTPException(status_code=400, detail="Your taxi has no active queue entry.")
-    long_pax = [p.dict() for p in (body.long_distance_passengers or [])]
+    long_pax = [p.dict() for p in (body.long_distance_passengers or []) if p.name.strip()]
+    if not long_pax and entry.get('long_distance_passengers'):
+        long_pax = entry.get('long_distance_passengers')
     if entry.get('long_distance') and not long_pax:
         raise HTTPException(status_code=400,
                             detail="Capture long-distance passenger details before departing.")
@@ -739,6 +817,10 @@ async def driver_depart(body: DepartIn, user=Depends(driver_dep)):
     await db.queue.delete_one({'id': entry['id']})
     await db.taxis.update_one({'registration': taxi['registration']},
                               {'$set': {'active_queue': False}})
+    await db.long_distance_requests.update_many(
+        {'taxi_registration': taxi['registration'], 'status': 'pending'},
+        {'$set': {'status': 'departed', 'passengers': long_pax, 'departed_at': now_iso()}}
+    )
     return {'ok': True, 'revenue': revenue}
 
 
@@ -749,7 +831,26 @@ async def driver_sos(user=Depends(driver_dep)):
         raise HTTPException(status_code=404, detail="No taxi assigned to you.")
     owner = await db.users.find_one({'role': 'owner', 'full_name': taxi['owner_name']})
     entry = await db.queue.find_one({'taxi_registration': taxi['registration']}, PROJ)
-    long_pax = entry.get('long_distance_passengers', []) if entry else []
+    
+    # Retrieve passenger list from queue entry, or long_distance_requests, or latest operations
+    long_pax = []
+    if entry and entry.get('long_distance_passengers'):
+        long_pax = entry.get('long_distance_passengers')
+    if not long_pax:
+        ldr = await db.long_distance_requests.find_one(
+            {'taxi_registration': taxi['registration']},
+            sort=[('created_at', -1)]
+        )
+        if ldr and ldr.get('passengers'):
+            long_pax = ldr['passengers']
+    if not long_pax:
+        op = await db.operations.find_one(
+            {'taxi_registration': taxi['registration']},
+            sort=[('departed_at', -1)]
+        )
+        if op and op.get('long_distance_passengers'):
+            long_pax = op['long_distance_passengers']
+
     sos_doc = {'id': str(uuid.uuid4()), 'driver_name': user['full_name'],
                'taxi_registration': taxi['registration'], 'rank_name': taxi['rank_name'],
                'owner_name': taxi['owner_name'], 'route': taxi['route'],
@@ -757,24 +858,82 @@ async def driver_sos(user=Depends(driver_dep)):
     email_sent = False
     if owner and owner.get('email'):
         from html import escape
-        rows = "".join(
-            f"<tr><td style='padding:4px 8px'>{escape(p.get('name',''))}</td>"
-            f"<td style='padding:4px 8px'>{escape(p.get('contact',''))}</td>"
-            f"<td style='padding:4px 8px'>{escape(p.get('destination',''))}</td></tr>"
-            for p in long_pax)
-        pax_block = (f"<h3>Long-distance passengers</h3><table>{rows}</table>" if rows else "")
+        
+        # Build clean, high-impact passenger table with next of kin
+        if long_pax:
+            pax_rows = ""
+            for idx, p in enumerate(long_pax, 1):
+                p_name = escape(p.get('name') or 'Passenger')
+                p_kin = escape(p.get('kin_name') or p.get('next_of_kin') or '—')
+                p_contact = escape(p.get('kin_contact') or p.get('contact') or '')
+                p_dest = escape(p.get('destination') or '—')
+                bg = "#f8fafc" if idx % 2 == 0 else "#ffffff"
+                
+                contact_cell = f"<a href='tel:{p_contact}' style='color:#dc2626;font-weight:bold;text-decoration:none;'>{p_contact}</a>" if p_contact else "—"
+                
+                pax_rows += (
+                    f"<tr style='background-color:{bg};border-bottom:1px solid #e2e8f0;'>"
+                    f"<td style='padding:8px 10px;text-align:center;font-weight:bold;color:#64748b;font-size:12px;'>{idx}</td>"
+                    f"<td style='padding:8px 10px;font-weight:bold;color:#0f172a;font-size:13px;'>{p_name}</td>"
+                    f"<td style='padding:8px 10px;color:#334155;font-size:13px;'>{p_kin}</td>"
+                    f"<td style='padding:8px 10px;font-size:13px;'>{contact_cell}</td>"
+                    f"<td style='padding:8px 10px;color:#64748b;font-size:12px;'>{p_dest}</td>"
+                    f"</tr>"
+                )
+            pax_table = (
+                f"<div style='margin-top:20px;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;'>"
+                f"<div style='background-color:#0f172a;padding:10px 14px;'>"
+                f"<span style='color:#f8fafc;font-weight:bold;font-size:13px;text-transform:uppercase;'>📋 Passenger Manifest & Next-of-Kin Emergency Contacts ({len(long_pax)})</span>"
+                f"</div>"
+                f"<table style='width:100%;border-collapse:collapse;text-align:left;font-family:Arial,sans-serif;'>"
+                f"<thead>"
+                f"<tr style='background-color:#f1f5f9;color:#475569;font-size:11px;text-transform:uppercase;border-bottom:2px solid #cbd5e1;'>"
+                f"<th style='padding:8px 10px;text-align:center;'>#</th>"
+                f"<th style='padding:8px 10px;'>Passenger</th>"
+                f"<th style='padding:8px 10px;'>Next of Kin</th>"
+                f"<th style='padding:8px 10px;'>Emergency Phone</th>"
+                f"<th style='padding:8px 10px;'>Destination</th>"
+                f"</tr>"
+                f"</thead>"
+                f"<tbody>{pax_rows}</tbody>"
+                f"</table>"
+                f"</div>"
+            )
+        else:
+            pax_table = (
+                "<div style='margin-top:16px;padding:12px 14px;background-color:#f8fafc;border:1px dashed #cbd5e1;border-radius:6px;color:#64748b;font-size:12px;'>"
+                "ℹ️ No passenger manifest recorded for this trip."
+                "</div>"
+            )
+
+        driver_cell = escape(user.get('cell_phone') or '')
+        driver_cell_link = f"<a href='tel:{driver_cell}' style='color:#38bdf8;text-decoration:none;font-weight:bold;'>{driver_cell}</a>" if driver_cell else "—"
+
         html = (
-            f"<table role='presentation' width='100%'><tr><td style='padding:24px;"
-            f"font-family:Arial,sans-serif;color:#111'>"
-            f"<h2 style='color:#b91c1c'>SOS ALERT from your driver</h2>"
-            f"<p>Driver <strong>{escape(user['full_name'])}</strong> has triggered an SOS.</p>"
-            f"<p>Taxi: <strong>{escape(taxi['registration'])}</strong><br>"
-            f"Rank: {escape(taxi['rank_name'])}<br>Route: {escape(taxi['route'])}<br>"
-            f"Driver contact: {escape(user.get('cell_phone',''))}<br>"
-            f"Time: {escape(sos_doc['created_at'])}</p>"
-            f"{pax_block}"
-            f"<p style='font-size:12px;color:#888'>Sent by E-RANK. We never ask for your "
-            f"password or card details by email.</p></td></tr></table>")
+            f"<table role='presentation' width='100%' style='background-color:#f8fafc;padding:20px;font-family:Arial,sans-serif;'>"
+            f"<tr><td align='center'>"
+            f"<table role='presentation' width='600' style='background-color:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);'>"
+            f"<tr><td style='background-color:#b91c1c;padding:18px 24px;color:#ffffff;'>"
+            f"<div style='font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#fecaca;'>EMERGENCY DISTRESS SIGNAL</div>"
+            f"<h1 style='margin:6px 0 0 0;font-size:22px;color:#ffffff;font-weight:bold;'>SOS ALERT FROM DRIVER</h1>"
+            f"</td></tr>"
+            f"<tr><td style='padding:24px;'>"
+            f"<table role='presentation' width='100%' style='background-color:#0f172a;border-radius:8px;padding:14px;color:#ffffff;font-size:13px;'>"
+            f"<tr><td style='color:#94a3b8;padding:4px 8px;width:32%;'>Driver:</td><td style='padding:4px 8px;font-weight:bold;color:#ffffff;'>{escape(user['full_name'])}</td></tr>"
+            f"<tr><td style='color:#94a3b8;padding:4px 8px;'>Driver Contact:</td><td style='padding:4px 8px;'>{driver_cell_link}</td></tr>"
+            f"<tr><td style='color:#94a3b8;padding:4px 8px;'>Taxi Reg:</td><td style='padding:4px 8px;font-weight:bold;font-size:15px;color:#ffffff;letter-spacing:0.5px;'>{escape(taxi['registration'])}</td></tr>"
+            f"<tr><td style='color:#94a3b8;padding:4px 8px;'>Rank:</td><td style='padding:4px 8px;color:#ffffff;'>{escape(taxi['rank_name'])}</td></tr>"
+            f"<tr><td style='color:#94a3b8;padding:4px 8px;'>Route:</td><td style='padding:4px 8px;color:#ffffff;'>{escape(taxi['route'])}</td></tr>"
+            f"<tr><td style='color:#94a3b8;padding:4px 8px;'>Triggered At:</td><td style='padding:4px 8px;color:#fbbf24;font-family:monospace;'>{escape(sos_doc['created_at'])}</td></tr>"
+            f"</table>"
+            f"{pax_table}"
+            f"<div style='margin-top:20px;padding:12px;background-color:#fef2f2;border-left:4px solid #ef4444;border-radius:4px;font-size:12px;color:#991b1b;'>"
+            f"<strong>Emergency Action:</strong> Contact driver immediately. If unable to reach driver, contact the next-of-kin contacts listed above and inform emergency services."
+            f"</div>"
+            f"<p style='margin-top:20px;font-size:11px;color:#94a3b8;text-align:center;'>Sent automatically by E-RANK Operations. We never ask for passwords or sensitive payment info by email.</p>"
+            f"</td></tr></table>"
+            f"</td></tr></table>"
+        )
         try:
             await send_email(to=owner['email'], subject=f"E-RANK SOS \u2013 {taxi['registration']}",
                              html=html)

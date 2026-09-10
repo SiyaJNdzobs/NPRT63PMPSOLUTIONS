@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { QrCode, Download, Printer, RefreshCw, Plus, Megaphone, Trash2, MapPin } from "lucide-react";
+import {
+  QrCode, Download, Printer, RefreshCw, Plus, Megaphone, Trash2,
+  MapPin, Users, Save, CheckCircle2, AlertCircle,
+} from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -23,9 +26,10 @@ export default function MarshalDashboard() {
   const [fareRoute, setFareRoute] = useState("");
   const [newFare, setNewFare] = useState("");
   const [post, setPost] = useState({ title: "", message: "" });
-  const [departOpen, setDepartOpen] = useState(false);
-  const [departReg, setDepartReg] = useState("");
-  const [departPax, setDepartPax] = useState([{ name: "", contact: "", destination: "" }]);
+  const [manifestOpen, setManifestOpen] = useState(false);
+  const [currentTaxi, setCurrentTaxi] = useState(null);
+  const [manifestPax, setManifestPax] = useState([]);
+  const [savingManifest, setSavingManifest] = useState(false);
 
   const rankQ = useQuery({ queryKey: ["m-rank"], queryFn: async () => (await api.get("/marshal/rank")).data, refetchInterval: 5000 });
   const queueQ = useQuery({ queryKey: ["m-queue"], queryFn: async () => (await api.get("/marshal/queue")).data, refetchInterval: 3000 });
@@ -50,8 +54,7 @@ export default function MarshalDashboard() {
       const payload = { registration };
       if (paxList) payload.long_distance_passengers = paxList.filter((p) => p.name.trim());
       const { data } = await api.post("/marshal/queue/depart", payload);
-      setDepartOpen(false);
-      setDepartPax([{ name: "", contact: "", destination: "" }]);
+      setManifestOpen(false);
       setResult({ type: "success", title: "Taxi departed", message: `Trip recorded. Revenue R${data.revenue} added to owner totals.` });
       qc.invalidateQueries({ queryKey: ["m-queue"] });
     } catch (e) {
@@ -59,9 +62,80 @@ export default function MarshalDashboard() {
     }
   };
 
+  const openManifest = (entry) => {
+    setCurrentTaxi(entry);
+    const existing = entry.long_distance_passengers || [];
+    if (existing.length > 0) {
+      setManifestPax(
+        existing.map((p) => ({
+          name: p.name || "",
+          kin_name: p.kin_name || p.next_of_kin || "",
+          kin_contact: p.kin_contact || p.contact || "",
+          destination: p.destination || "",
+        }))
+      );
+    } else {
+      setManifestPax([{ name: "", kin_name: "", kin_contact: "", destination: "" }]);
+    }
+    setManifestOpen(true);
+  };
+
+  const saveManifest = async (showToast = true) => {
+    if (!currentTaxi) return false;
+    const validPax = manifestPax.filter((p) => p.name.trim());
+    if (validPax.length === 0) {
+      toast.error("Please enter at least one passenger name.");
+      return false;
+    }
+    setSavingManifest(true);
+    try {
+      await api.post("/marshal/long-distance/save", {
+        registration: currentTaxi.taxi_registration,
+        passengers: validPax,
+      });
+      if (showToast) toast.success(`Saved manifest for ${currentTaxi.taxi_registration} (${validPax.length} passengers).`);
+      qc.invalidateQueries({ queryKey: ["m-queue"] });
+      return true;
+    } catch (e) {
+      toast.error(apiError(e));
+      return false;
+    } finally {
+      setSavingManifest(false);
+    }
+  };
+
+  const departFromManifest = async () => {
+    if (!currentTaxi) return;
+    const validPax = manifestPax.filter((p) => p.name.trim());
+    if (validPax.length === 0) {
+      toast.error("Please enter at least one passenger name before departing.");
+      return;
+    }
+    const saved = await saveManifest(false);
+    if (!saved) return;
+    await runDepart(currentTaxi.taxi_registration, validPax);
+  };
+
   const onDepart = (entry) => {
-    if (entry.long_distance) { setDepartReg(entry.taxi_registration); setDepartOpen(true); }
-    else runDepart(entry.taxi_registration, null);
+    if (entry.long_distance) {
+      if (entry.long_distance_passengers && entry.long_distance_passengers.length > 0) {
+        runDepart(entry.taxi_registration, entry.long_distance_passengers);
+      } else {
+        openManifest(entry);
+      }
+    } else {
+      runDepart(entry.taxi_registration, null);
+    }
+  };
+
+  const quickFillSeats = () => {
+    if (!currentTaxi) return;
+    const targetSeats = currentTaxi.seats || 15;
+    const currentList = [...manifestPax];
+    while (currentList.length < targetSeats) {
+      currentList.push({ name: "", kin_name: "", kin_contact: "", destination: "" });
+    }
+    setManifestPax(currentList);
   };
 
   const updateFare = async () => {
@@ -157,6 +231,41 @@ export default function MarshalDashboard() {
                 <Button onClick={addTaxi} data-testid="marshal-add-btn" className="h-11 bg-primary text-black hover:bg-primary/90 gap-1"><Plus size={16} /> Add</Button>
               </div>
             </Card>
+
+            {queue.filter((e) => e.long_distance).length > 0 && (
+              <Card className="bg-gradient-to-r from-amber-950/40 via-[#181F2C] to-[#181F2C] border-amber-500/40 p-4 rounded-xl shadow-md" data-testid="marshal-long-distance-banner">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                      <AlertCircle size={22} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-white text-base">Long-Distance Trip in Queue</h3>
+                        <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[11px]">Action Required</Badge>
+                      </div>
+                      <p className="text-xs text-slate-300 mt-0.5">
+                        Driver joined under a long-distance route. Capture passenger names and next-of-kin contacts for emergency SOS protection before departure.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {queue.filter((e) => e.long_distance).map((t) => (
+                      <Button
+                        key={t.id}
+                        size="sm"
+                        onClick={() => openManifest(t)}
+                        data-testid={`marshal-banner-manifest-btn-${t.taxi_registration.replace(/\s+/g, '-')}`}
+                        className="bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs h-9 gap-1.5 shadow"
+                      >
+                        <Users size={15} /> Capture Passengers ({t.taxi_registration})
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            )}
+
             <div className="rounded-xl border border-[#263144] overflow-hidden">
               <div className="overflow-auto">
                 <table className="w-full text-sm">
@@ -168,11 +277,40 @@ export default function MarshalDashboard() {
                     {queue.map((e) => (
                       <tr key={e.id} data-testid="queue-row" className="border-t border-[#263144]">
                         <td className="px-4 py-3 font-mono text-emerald-400 font-bold">#{e.position}</td>
-                        <td className="px-4 py-3 font-mono text-white">{e.taxi_registration}</td>
+                        <td className="px-4 py-3 font-mono text-white font-semibold">{e.taxi_registration}</td>
                         <td className="px-4 py-3 text-slate-300">{e.driver_name}</td>
-                        <td className="px-4 py-3 text-slate-300">{e.route}{e.long_distance && <Badge className="ml-2 bg-primary/15 text-primary border-primary/30 text-[9px]">LD</Badge>}</td>
+                        <td className="px-4 py-3 text-slate-300">
+                          {e.route}
+                          {e.long_distance && <Badge className="ml-2 bg-primary/15 text-primary border-primary/30 text-[9px]">LD</Badge>}
+                          {e.long_distance && (
+                            e.long_distance_passengers?.length > 0 ? (
+                              <Badge className="ml-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[9px]">
+                                {e.long_distance_passengers.length} pax saved
+                              </Badge>
+                            ) : (
+                              <Badge className="ml-1.5 bg-amber-500/20 text-amber-400 border-amber-500/30 text-[9px]">
+                                Manifest pending
+                              </Badge>
+                            )
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-right font-mono text-primary">{e.fare_label}</td>
-                        <td className="px-4 py-3 text-right"><Button size="sm" onClick={() => onDepart(e)} data-testid="marshal-depart-btn" className="bg-primary text-black hover:bg-primary/90 text-xs h-8">Depart</Button></td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {e.long_distance && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openManifest(e)}
+                                data-testid={`marshal-manifest-btn-${e.taxi_registration.replace(/\s+/g, '-')}`}
+                                className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10 text-xs h-8 gap-1"
+                              >
+                                <Users size={13} /> {e.long_distance_passengers?.length > 0 ? "Edit Pax" : "Capture Pax"}
+                              </Button>
+                            )}
+                            <Button size="sm" onClick={() => onDepart(e)} data-testid="marshal-depart-btn" className="bg-primary text-black hover:bg-primary/90 text-xs h-8">Depart</Button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -235,25 +373,167 @@ export default function MarshalDashboard() {
           </TabsContent>
         </Tabs>
       </main>
-      <Dialog open={departOpen} onOpenChange={setDepartOpen}>
-        <DialogContent className="bg-[#181F2C] border-[#263144] max-w-lg" data-testid="marshal-depart-dialog">
+      <Dialog open={manifestOpen} onOpenChange={setManifestOpen}>
+        <DialogContent className="bg-[#181F2C] border-[#263144] max-w-4xl" data-testid="marshal-manifest-dialog">
           <DialogHeader>
-            <DialogTitle className="text-white font-heading">Long-distance passengers — {departReg}</DialogTitle>
-            <DialogDescription className="text-slate-400">Required before departing a long-distance taxi.</DialogDescription>
+            <DialogTitle className="text-white font-heading flex items-center justify-between gap-2 flex-wrap">
+              <span>Long-Distance Passenger Manifest — <span className="text-primary font-mono">{currentTaxi?.taxi_registration}</span></span>
+              <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs">
+                {manifestPax.filter((p) => p.name.trim()).length} / {currentTaxi?.seats || 15} Seats Recorded
+              </Badge>
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Route: <span className="text-white font-medium">{currentTaxi?.route}</span> · Driver: <span className="text-white font-medium">{currentTaxi?.driver_name}</span>.
+              This passenger manifest is immediately synchronized to the owner for emergency SOS protection.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 max-h-[50vh] overflow-auto">
-            {departPax.map((p, i) => (
-              <div key={i} className="grid grid-cols-3 gap-2">
-                <Input placeholder="Name" value={p.name} onChange={(ev) => { const c = [...departPax]; c[i].name = ev.target.value; setDepartPax(c); }} data-testid={`m-pax-name-${i}`} className="bg-[#0A0D14] border-[#263144] text-white" />
-                <Input placeholder="Contact" value={p.contact} onChange={(ev) => { const c = [...departPax]; c[i].contact = ev.target.value; setDepartPax(c); }} className="bg-[#0A0D14] border-[#263144] text-white" />
-                <Input placeholder="Destination" value={p.destination} onChange={(ev) => { const c = [...departPax]; c[i].destination = ev.target.value; setDepartPax(c); }} className="bg-[#0A0D14] border-[#263144] text-white" />
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap pb-1">
+              <div className="text-xs text-slate-400">
+                Ensure passenger names, next-of-kin names, and contact phone numbers are captured.
               </div>
-            ))}
-            <Button variant="outline" size="sm" onClick={() => setDepartPax([...departPax, { name: "", contact: "", destination: "" }])} className="border-[#334155] text-slate-200 gap-1"><Plus size={14} /> Add passenger</Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={quickFillSeats}
+                  data-testid="marshal-quick-fill-btn"
+                  className="border-[#334155] text-slate-300 hover:text-white text-xs h-8"
+                >
+                  Fill to Capacity ({currentTaxi?.seats || 15} seats)
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setManifestPax([...manifestPax, { name: "", kin_name: "", kin_contact: "", destination: "" }])}
+                  data-testid="marshal-add-row-btn"
+                  className="border-[#334155] text-slate-300 hover:text-white text-xs h-8 gap-1"
+                >
+                  <Plus size={13} /> Add Row
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-[#263144] overflow-hidden max-h-[50vh] overflow-y-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#121721] text-slate-400 uppercase tracking-wider sticky top-0 z-10">
+                  <tr>
+                    <th className="px-3 py-2.5 w-12 text-center">#</th>
+                    <th className="px-3 py-2.5">Passenger Name *</th>
+                    <th className="px-3 py-2.5">Next of Kin Name *</th>
+                    <th className="px-3 py-2.5">Next of Kin Contact *</th>
+                    <th className="px-3 py-2.5">Destination</th>
+                    <th className="px-2 py-2.5 w-10 text-center"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#263144]">
+                  {manifestPax.map((p, i) => (
+                    <tr key={i} className="hover:bg-[#1f2937]/50">
+                      <td className="px-3 py-2 text-center font-mono text-slate-400 font-bold">{i + 1}</td>
+                      <td className="px-2 py-1.5">
+                        <Input
+                          placeholder="e.g. Sipho Khumalo"
+                          value={p.name}
+                          onChange={(e) => {
+                            const c = [...manifestPax];
+                            c[i].name = e.target.value;
+                            setManifestPax(c);
+                          }}
+                          className="h-9 bg-[#0A0D14] border-[#263144] text-white text-xs font-medium"
+                          data-testid={`manifest-pax-name-${i}`}
+                        />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <Input
+                          placeholder="e.g. Nomsa Khumalo"
+                          value={p.kin_name}
+                          onChange={(e) => {
+                            const c = [...manifestPax];
+                            c[i].kin_name = e.target.value;
+                            setManifestPax(c);
+                          }}
+                          className="h-9 bg-[#0A0D14] border-[#263144] text-white text-xs"
+                          data-testid={`manifest-pax-kin-name-${i}`}
+                        />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <Input
+                          placeholder="e.g. 082 345 6789"
+                          value={p.kin_contact}
+                          onChange={(e) => {
+                            const c = [...manifestPax];
+                            c[i].kin_contact = e.target.value;
+                            setManifestPax(c);
+                          }}
+                          className="h-9 bg-[#0A0D14] border-[#263144] text-white text-xs font-mono"
+                          data-testid={`manifest-pax-kin-contact-${i}`}
+                        />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <Input
+                          placeholder="e.g. Johannesburg"
+                          value={p.destination}
+                          onChange={(e) => {
+                            const c = [...manifestPax];
+                            c[i].destination = e.target.value;
+                            setManifestPax(c);
+                          }}
+                          className="h-9 bg-[#0A0D14] border-[#263144] text-white text-xs"
+                          data-testid={`manifest-pax-destination-${i}`}
+                        />
+                      </td>
+                      <td className="px-2 py-1.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const c = manifestPax.filter((_, idx) => idx !== i);
+                            setManifestPax(c.length > 0 ? c : [{ name: "", kin_name: "", kin_contact: "", destination: "" }]);
+                          }}
+                          className="text-slate-500 hover:text-red-400 p-1"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDepartOpen(false)} className="border-[#334155] text-slate-200">Cancel</Button>
-            <Button onClick={() => runDepart(departReg, departPax)} disabled={!departPax.some((p) => p.name.trim())} data-testid="m-confirm-depart-btn" className="bg-primary text-black hover:bg-primary/90">Confirm & depart</Button>
+
+          <DialogFooter className="flex items-center justify-between sm:justify-between gap-2 pt-2 border-t border-[#263144]">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setManifestOpen(false)}
+              className="border-[#334155] text-slate-300"
+            >
+              Close
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => saveManifest(true)}
+                disabled={savingManifest || !manifestPax.some((p) => p.name.trim())}
+                data-testid="marshal-save-manifest-btn"
+                className="border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 gap-1.5"
+              >
+                <Save size={15} /> {savingManifest ? "Saving…" : "Save Manifest"}
+              </Button>
+              <Button
+                type="button"
+                onClick={departFromManifest}
+                disabled={savingManifest || !manifestPax.some((p) => p.name.trim())}
+                data-testid="marshal-save-depart-btn"
+                className="bg-primary text-black hover:bg-primary/90 gap-1.5"
+              >
+                <CheckCircle2 size={15} /> Save & Depart
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
