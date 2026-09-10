@@ -1,0 +1,46 @@
+{
+  "summary": "Ran comprehensive backend pytest suite (41 tests across public, auth+must_change, register, profile, marshal, driver, owner, admin, SOS) plus Playwright UI smoke tests on Landing, SignIn role grid, wrong-credential toast, admin/driver/owner dashboards, and PublicShare. All 41 backend tests PASSED (100%). All UI flows loaded correctly and integrated with the backend. Seeded PINs were permanently changed for the accounts listed under test_credentials — later agents MUST use those new secrets.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/profile (marshal/driver)", "issue": "When a marshal/driver sends an email in body it is silently ignored (no 400). Not a bug per spec, but consider surfacing a warning or 400 for clarity."},
+      {"endpoint": "GET /api/public/routes", "issue": "N+1 query pattern: iterates routes and issues a taxis.find per route. Fine for seed size but flag for scale."},
+      {"endpoint": "seed()", "issue": "On every startup seed forcibly re-sets must_change=true via $set for admin/owner/marshal/driver users. Existing users who already changed their PIN get must_change flipped back to True on backend restart, forcing another PIN change (secret_hash is preserved via _upsert_user so the new PIN still works)."},
+      {"endpoint": "POST /api/driver/join geo-check", "issue": "Uses 20m fixed threshold; not per-rank configurable. Product-level note only."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "SignIn success toast", "issues": ["'Signed in' toast overlaps the top-right user chip briefly on all dashboards (visible in screenshots). Minor z-index / positioning polish."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None blocking. Consider not resetting must_change on every seed startup (guard with $setOnInsert) so PIN-changed users are not re-prompted after a backend restart.",
+    "Optional: return 400 (or a warning field) when a marshal/driver attempts to update email via /profile instead of silently dropping it."
+  ],
+  "critical_code_review_comments": [
+    "seed._upsert_user hashes the secret only on insert, but the $set path still re-writes must_change=True on every startup — this partially defeats the change-secret flow after a backend restart.",
+    "public_routes has N+1 taxi lookups.",
+    "server.py is ~750 lines and mixes all routers; consider splitting per-role router modules for maintainability.",
+    "No rate limiting or brute-force lockout on /api/auth/login — playbook mentions 5-fail lockout expectation; not implemented.",
+    "CORS uses allow_origins=['*'] with allow_credentials=True which browsers reject for credentialed requests (works here because JWT is sent via Authorization header, not cookies, but the combination is misconfigured)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/conftest.py"
+  ],
+  "success_rate": {"backend": "100% (41/41)", "frontend": "100% smoke (Landing, SignIn, Admin, Driver, Owner dashboards, PublicShare all loaded and rendered correct data)"},
+  "test_credentials": "IMPORTANT — new secrets set during this run (persisted): admin siya@erank.co.za / newErank2026! ; owner Mzamo Vilakazi / 990099 ; marshal Muzi Sogoni / 900900900 ; marshal Lesedi Morata / 900900900 ; driver Sizwe Dlomo / 80088008 ; driver Owen Mathe / 80088008. Passenger Lizwi Lakhe / 246810 unchanged. Other seeded accounts still use their original PINs from /app/memory/test_credentials.md.",
+  "seed_data_creation": "Created 1 test passenger via /api/auth/register (name prefix 'TEST User <uuid>') — safe to leave.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests are idempotent — _login_any() tries both original and updated secret so the suite runs cleanly on re-execution. Marshal Lesedi Morata was also PIN-changed to 900900900 to enable the driver wrong-rank test. If seed_module.seed() is modified to guard must_change with $setOnInsert, remove the old-secret fallback path.",
+  "rca of the issue": "No blocking issues observed. Note on seed: because seed() runs on every startup and $sets must_change=True for admin/owner/marshal/driver, after each backend restart the affected users will be re-prompted to change PIN on next login — mitigation: move must_change into $setOnInsert only."
+}

@@ -1,0 +1,41 @@
+{
+  "summary": "Login regression re-test. CRITICAL: The user's claim that 'DB has been RESET so all seeded accounts use original credentials' is FALSE. Direct MongoDB inspection shows the previous test run's mutations are still persisted: (1) admin siya@erank.co.za password hash does NOT verify against 'erank2026' (returns 401), (2) owner/marshal/driver seeded accounts still have must_change=False (should be True per spec). Passenger Lizwi Lakhe works correctly. Passenger self-register + change-secret + re-login flow works. Root cause: seed.py _upsert_user only updates non-secret fields on existing users — it does NOT rewrite secret_hash or must_change. So a plain re-seed cannot 'reset' credentials; the users collection must be dropped (or the specific fields explicitly reset) before re-seeding.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "/api/auth/login (admin)", "issue": "admin siya@erank.co.za / erank2026 returns 401 'Wrong details'. Stored bcrypt hash $2b$12$bxHHEaMFWDFb4Qc.MvrvSe... does NOT verify against 'erank2026' (or any obvious variant). Previous automated test's password change was never rolled back. User is locked out of admin.", "priority": "CRITICAL"},
+      {"endpoint": "/api/auth/login (owner/marshal/driver)", "issue": "Login SUCCEEDS with seeded PINs (123456 / 123456789 / 12345678) but response returns must_change=False for all three. Per spec these seeded non-passenger accounts must have must_change=True. Previous test mutated must_change and re-seed did not reset it. First-login change flow is now silently skipped for these accounts.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_login_regression.py",
+    "/app/test_reports/pytest/pytest_login_regression.xml"
+  ],
+  "action_items": [
+    "Reset admin siya@erank.co.za password_hash to bcrypt('erank2026') directly in MongoDB, OR drop the users collection and re-run seed. Do the same for the other 4 admins if their hashes also drift.",
+    "Reset must_change=True on all non-passenger seeded accounts (admin/owner/marshal/driver) — one-shot Mongo update: db.users.update_many({role:{$in:['admin','owner','marshal','driver']}}, {$set:{must_change:True}}). Note the specific 4 accounts under test are Mzamo Vilakazi, Muzi Sogoni, Sizwe Dlomo (plus siya) — but per spec ALL seeded non-passenger accounts should be True.",
+    "Enhance seed.py _upsert_user so a fresh seed run can idempotently restore the initial secret_hash and must_change (e.g. accept a `force_reset` flag, or add a one-shot admin endpoint / CLI to reset seeded credentials). Currently _upsert_user's line 84-87 branch never touches secret_hash/must_change on existing docs, which is why the user's 'DB reset' didn't take effect."
+  ],
+  "critical_code_review_comments": [
+    "seed.py _upsert_user (lines 79-93): existing-user branch pops `id` but never resets secret_hash or must_change. This makes any 'reset by re-seeding' impossible without manually dropping the users collection. Recommend adding an optional reset path.",
+    "Admin login failure indicates there is no operational way for an admin who has been locked out to recover — no admin password-reset endpoint exists. Consider a break-glass CLI or /api/auth/admin-reset restricted to a super-admin.",
+    "Wrong-secret path returns a generic 401 with detail 'Wrong details. Please check and try again.' — verified friendly."
+  ],
+  "updated_files": ["/app/backend/tests/test_login_regression.py"],
+  "success_rate": {"backend": "50% (4/8 login-regression assertions passed)", "frontend": "N/A"},
+  "test_credentials": "Verified from /app/memory/test_credentials.md. Admin credential 'siya@erank.co.za / erank2026' does NOT work against current DB (401). Owner/Marshal/Driver PINs match but must_change flag is wrong. Passenger Lizwi Lakhe / 246810 works as expected.",
+  "seed_data_creation": "Created ONE throwaway passenger via /api/auth/register (full_name 'TEST Throwaway <timestamp>', pin 111111 -> changed to 222222). This is the ONLY account whose secret was mutated during this test run.",
+  "accounts_touched_final_state": {
+    "siya@erank.co.za (admin)": "NOT CHANGED by this test. Currently BROKEN in DB (hash does not match 'erank2026').",
+    "Mzamo Vilakazi (owner)": "NOT CHANGED by this test. PIN still 123456; must_change=False (drift from spec).",
+    "Muzi Sogoni (marshal)": "NOT CHANGED by this test. PIN still 123456789; must_change=False (drift from spec).",
+    "Sizwe Dlomo (driver)": "NOT CHANGED by this test. PIN still 12345678; must_change=False (drift from spec).",
+    "Lizwi Lakhe (passenger)": "NOT CHANGED by this test. PIN still 246810; must_change=False (as expected).",
+    "TEST Throwaway <ts> (self-registered passenger)": "Created and PIN changed 111111 -> 222222. Safe to delete."
+  },
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "After main agent fixes admin hash + must_change flags, re-run `pytest /app/backend/tests/test_login_regression.py -v`. All 8 assertions should pass. Do NOT run change-secret against any seeded (admin/owner/marshal/driver/Lizwi) account.",
+  "rca of the issue": "Reproduction: (1) POST /api/auth/login {role:'admin',identifier:'siya@erank.co.za',secret:'erank2026'} -> 401. (2) Direct Mongo query on users collection: siya's secret_hash is $2b$12$bxHHEaMFWDFb4Qc.MvrvSe... which verify_secret('erank2026', hash) returns False. Root cause: previous automated test called /api/auth/change-secret against seeded admin, which overwrote secret_hash and set must_change=False. The user's claimed 'DB reset' did not drop the users collection, and seed._upsert_user's existing-user branch (seed.py:85-87) intentionally does NOT rewrite secret_hash or must_change — so re-running seed had no effect on already-mutated auth fields. Mitigation: (a) drop db.users then re-seed, OR (b) directly bcrypt-set siya.secret_hash to 'erank2026' and $set must_change:True on admin/owner/marshal/driver seeded rows. Long-term: add a reset flag / admin CLI so operators can restore seeded credentials without manual Mongo access."
+}

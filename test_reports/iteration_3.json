@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration-3 review round: backend + frontend smoke. Seeded credentials confirmed restored on backend startup (admin/owner/marshal/driver all return must_change=true; passenger Lizwi returns must_change=false). All 22 backend tests pass (18 in test_new_features.py + 4 new in test_marshal_driver_flow.py). Covered: login regression + friendly 401, validation errors on /admin/owners, /admin/marshals, /owner/taxis, public+passenger taxi lookup exposing driver_name and driver_contact (+27), marshal short-route add+depart with revenue 26*15=390, long-distance requires long_distance_passengers, owner revenue shape (total_revenue, per_taxi, operations), marshal ADD rank-scope + double-queue rejection, driver join via marshal QR token (correct rank succeeds, wrong rank rejected). Frontend smoke: landing/signin/passenger-dashboard/change-secret pages ALL show the 'EST 2026 · Developed by PMP Solutions' footer; passenger login works end-to-end; owner login correctly redirects to /change-secret (must_change enforced). Owner RandIcon + expandable taxi rows and Driver 'Scan rank QR to join' + 'Enter code manually' fallback verified by source-code inspection (interactive dashboards are gated by the must_change screen, which per test guidance we did not bypass).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_new_features.py",
+    "/app/backend/tests/test_marshal_driver_flow.py",
+    "/app/test_reports/pytest/new_features.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "test_marshal_driver_flow tests must be run with -n 0 (serial) because they mutate the same taxi (MT 004 GP) queue state as test_new_features::TestMarshalDepart. With the pytest.ini default '-n 2 --dist loadscope' they interleave and race on shared preview backend. Consider using unique taxi registrations or a per-test seed/rollback fixture in future backend tests.",
+    "seed.py restore-on-startup verified working: after backend restart admin/owner/marshal/driver all report must_change=true and login with documented PINs succeeds. Passenger Lizwi has must_change=false as expected.",
+    "Owner dashboard revenue stat uses a custom RandIcon component and formats amounts as R{amount}; expandable rows render Trips/Revenue/recent trips correctly (OwnerDashboard.jsx lines 81, 141-155).",
+    "Driver dashboard exposes both camera scan (data-testid='driver-scan-btn') and manual entry toggle (data-testid='manual-toggle'), matching the requirement. QrScanner is dialog-gated, so headless-browser camera limitations do not affect the manual-entry fallback."
+  ],
+  "updated_files": ["/app/backend/tests/test_marshal_driver_flow.py"],
+  "success_rate": {"backend": "100% (22/22)", "frontend": "100% smoke (footers on 4 routes verified; passenger login OK; owner must_change redirect OK)"},
+  "test_credentials": "All from /app/memory/test_credentials.md work as documented. Seeded credentials NOT mutated in this run.",
+  "seed_data_creation": "None. Test flows reused existing seeded taxis (MT 004 GP for MTN short-route, IN 123 NC for Indian Center long-distance) and cleaned up their queue state (departed at end of each test).",
+  "accounts_touched_final_state": {
+    "siya@erank.co.za (admin)": "NOT CHANGED. Logged in only to obtain token; no /auth/change-secret call. must_change=true preserved.",
+    "Mzamo Vilakazi (owner)": "NOT CHANGED. Token acquired via login only. Frontend login was exercised and correctly redirected to /change-secret; the change form was NOT submitted (screenshot only).",
+    "Muzi Sogoni (marshal, MTN)": "NOT CHANGED. Token acquired via login only. Used for queue add/depart and QR issue.",
+    "Lesedi Morata (marshal, Indian Center)": "NOT CHANGED. Token acquired via login only. Used for long-distance depart flow.",
+    "Sizwe Dlomo (driver)": "NOT CHANGED. Token acquired via login only. Used for driver/join.",
+    "Owen Mathe (driver)": "NOT CHANGED. Token acquired via login only.",
+    "Lizwi Lakhe (passenger)": "NOT CHANGED. Logged in via frontend UI to verify dashboard footer."
+  },
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run backend tests with `pytest backend/tests/test_new_features.py backend/tests/test_marshal_driver_flow.py -v -n 0` (serial). If you must run in parallel, keep the two files in the same worker via loadscope or rename them into one class. Do NOT call /api/auth/change-secret on any seeded account. Owner/marshal/driver dashboards can only be UI-tested after change-secret; prefer inspecting the /change-secret redirect + component source rather than mutating seeded PINs.",
+  "rca of the issue": "No functional bugs found in this round. Only observation: pytest.ini enables xdist parallel by default (-n 2 --dist loadscope), which caused a shared-taxi-state race between test_new_features.TestMarshalDepart and test_marshal_driver_flow when both files ran together. Mitigated by running with -n 0; not a product bug."
+}
