@@ -3,10 +3,13 @@ import uuid
 import base64
 import logging
 import math
+from datetime import datetime
 from typing import Optional, List
 
 import qrcode
 from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 from fastapi import FastAPI, APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
@@ -516,22 +519,251 @@ async def owner_revenue(user=Depends(owner_dep)):
 
 @api.get("/owner/revenue/export")
 async def owner_revenue_export(user=Depends(owner_dep)):
-    ops = await db.operations.find({'owner_name': user['full_name']}, PROJ).sort('departed_at', -1).to_list(10000)
+    owner_name = user['full_name']
+    ops = await db.operations.find({'owner_name': owner_name}, PROJ).sort('departed_at', -1).to_list(10000)
+
     wb = Workbook()
     ws = wb.active
-    ws.title = "Revenue"
-    ws.append(["Date", "Taxi", "Rank", "Route", "Seats", "Fare (R)", "Revenue (R)", "Long Distance"])
+    ws.title = "Revenue Statement"
+    ws.views.sheetView[0].showGridLines = True
+
+    COLOR_BRAND_DARK = "0F172A"    # Deep Slate
+    COLOR_BRAND_EMERALD = "059669" # Rich Emerald
+    COLOR_HEADER_BG = "1E293B"     # Slate Navy
+    COLOR_ZEBRA = "F8FAFC"         # Soft Zebra Stripe
+    COLOR_WHITE = "FFFFFF"
+    COLOR_BORDER = "CBD5E1"        # Clean Border
+
+    font_title = Font(name="Calibri", size=15, bold=True, color=COLOR_WHITE)
+    font_subtitle = Font(name="Calibri", size=10, italic=True, color="CBD5E1")
+    font_card_lbl = Font(name="Calibri", size=9, bold=True, color="64748B")
+    font_card_val = Font(name="Calibri", size=13, bold=True, color="0F172A")
+    font_card_val_em = Font(name="Calibri", size=13, bold=True, color=COLOR_BRAND_EMERALD)
+
+    font_th = Font(name="Calibri", size=11, bold=True, color=COLOR_WHITE)
+    font_td = Font(name="Calibri", size=10, color="1E293B")
+    font_td_bold = Font(name="Calibri", size=10, bold=True, color="1E293B")
+    font_total = Font(name="Calibri", size=11, bold=True, color="0F172A")
+
+    fill_banner = PatternFill(start_color=COLOR_BRAND_DARK, end_color=COLOR_BRAND_DARK, fill_type="solid")
+    fill_subbanner = PatternFill(start_color="334155", end_color="334155", fill_type="solid")
+    fill_card = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    fill_card_em = PatternFill(start_color="ECFDF5", end_color="ECFDF5", fill_type="solid")
+    fill_th = PatternFill(start_color=COLOR_HEADER_BG, end_color=COLOR_HEADER_BG, fill_type="solid")
+    fill_zebra = PatternFill(start_color=COLOR_ZEBRA, end_color=COLOR_ZEBRA, fill_type="solid")
+    fill_white = PatternFill(start_color=COLOR_WHITE, end_color=COLOR_WHITE, fill_type="solid")
+    fill_total = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
+
+    thin_border_side = Side(style="thin", color=COLOR_BORDER)
+    thin_border = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
+
+    double_bottom_side = Side(style="double", color="0F172A")
+    top_thin_side = Side(style="thin", color="0F172A")
+    total_border = Border(top=top_thin_side, bottom=double_bottom_side, left=thin_border_side, right=thin_border_side)
+
+    align_center = Alignment(horizontal="center", vertical="center")
+    align_left = Alignment(horizontal="left", vertical="center")
+    align_right = Alignment(horizontal="right", vertical="center")
+
+    # 1. Main Title Banner (Row 1)
+    ws.merge_cells("A1:I1")
+    cell_a1 = ws["A1"]
+    cell_a1.value = "E-RANK OPERATIONS PLATFORM  |  OFFICIAL FLEET REVENUE STATEMENT"
+    cell_a1.font = font_title
+    cell_a1.fill = fill_banner
+    cell_a1.alignment = align_center
+    ws.row_dimensions[1].height = 36
+
+    # 2. Sub-header (Row 2)
+    ws.merge_cells("A2:I2")
+    cell_a2 = ws["A2"]
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    cell_a2.value = f"Fleet Owner: {owner_name.upper()}   ·   Exported: {now_str} UTC   ·   Confidential Audit Statement"
+    cell_a2.font = font_subtitle
+    cell_a2.fill = fill_subbanner
+    cell_a2.alignment = align_center
+    ws.row_dimensions[2].height = 22
+
+    ws.row_dimensions[3].height = 10
+
+    # 3. KPI Summary Cards (Rows 4-5)
+    total_rev = sum(o.get('revenue', 0) for o in ops)
+    total_trips = len(ops)
+    unique_taxis = len(set(o.get('taxi_registration') for o in ops if o.get('taxi_registration')))
+    ld_trips = sum(1 for o in ops if o.get('long_distance'))
+    ld_rev = sum(o.get('revenue', 0) for o in ops if o.get('long_distance'))
+
+    # Card 1: Total Revenue
+    ws.merge_cells("A4:B4")
+    ws["A4"] = "TOTAL REVENUE"
+    ws["A4"].font = font_card_lbl
+    ws["A4"].fill = fill_card_em
+    ws["A4"].alignment = align_center
+    ws.merge_cells("A5:B5")
+    ws["A5"] = total_rev
+    ws["A5"].number_format = '"R "#,##0.00'
+    ws["A5"].font = font_card_val_em
+    ws["A5"].fill = fill_card_em
+    ws["A5"].alignment = align_center
+
+    # Card 2: Total Trips
+    ws.merge_cells("C4:D4")
+    ws["C4"] = "COMPLETED TRIPS"
+    ws["C4"].font = font_card_lbl
+    ws["C4"].fill = fill_card
+    ws["C4"].alignment = align_center
+    ws.merge_cells("C5:D5")
+    ws["C5"] = f"{total_trips} Trips"
+    ws["C5"].font = font_card_val
+    ws["C5"].fill = fill_card
+    ws["C5"].alignment = align_center
+
+    # Card 3: Active Vehicles
+    ws.merge_cells("E4:F4")
+    ws["E4"] = "ACTIVE TAXIS"
+    ws["E4"].font = font_card_lbl
+    ws["E4"].fill = fill_card
+    ws["E4"].alignment = align_center
+    ws.merge_cells("E5:F5")
+    ws["E5"] = f"{unique_taxis} Vehicles"
+    ws["E5"].font = font_card_val
+    ws["E5"].fill = fill_card
+    ws["E5"].alignment = align_center
+
+    # Card 4: Long Distance Revenue
+    ws.merge_cells("G4:I4")
+    ws["G4"] = "LONG-DISTANCE REVENUE"
+    ws["G4"].font = font_card_lbl
+    ws["G4"].fill = fill_card
+    ws["G4"].alignment = align_center
+    ws.merge_cells("G5:I5")
+    ws["G5"] = f"R {ld_rev:,.2f}  ({ld_trips} trips)"
+    ws["G5"].font = font_card_val
+    ws["G5"].fill = fill_card
+    ws["G5"].alignment = align_center
+
+    for r in range(4, 6):
+        ws.row_dimensions[r].height = 20
+        for c in range(1, 10):
+            ws.cell(row=r, column=c).border = thin_border
+
+    ws.row_dimensions[6].height = 12
+
+    # 4. Table Headers (Row 7)
+    headers = [
+        ("Departure Date & Time", align_center),
+        ("Taxi Registration", align_center),
+        ("Driver Name", align_left),
+        ("Rank Name", align_left),
+        ("Route Name", align_left),
+        ("Trip Type", align_center),
+        ("Seats", align_right),
+        ("Fare per Seat", align_right),
+        ("Total Revenue", align_right),
+    ]
+    ws.row_dimensions[7].height = 26
+    for col_idx, (title, align) in enumerate(headers, 1):
+        c = ws.cell(row=7, column=col_idx)
+        c.value = title
+        c.font = font_th
+        c.fill = fill_th
+        c.alignment = align
+        c.border = thin_border
+
+    # 5. Data Rows (Row 8+)
+    cur_row = 8
     for o in ops:
-        ws.append([o.get('departed_at', ''), o.get('taxi_registration', ''),
-                   o.get('rank_name', ''), o.get('route', ''), o.get('seats', 0),
-                   o.get('fare_amount', 0), o.get('revenue', 0),
-                   "Yes" if o.get('long_distance') else "No"])
-    ws.append([])
-    ws.append(["", "", "", "", "", "TOTAL", sum(o.get('revenue', 0) for o in ops)])
+        ws.row_dimensions[cur_row].height = 20
+        is_even = (cur_row % 2 == 0)
+        row_fill = fill_zebra if is_even else fill_white
+
+        raw_date = str(o.get('departed_at', ''))
+        if 'T' in raw_date:
+            date_disp = raw_date.replace('T', ' ').split('.')[0][:16]
+        else:
+            date_disp = raw_date[:16]
+
+        taxi_reg = o.get('taxi_registration', '—')
+        driver_name = o.get('driver_name', '—')
+        rank_name = o.get('rank_name', '—')
+        route_name = o.get('route', '—')
+        is_ld = bool(o.get('long_distance'))
+        trip_type = "Long-Distance" if is_ld else "Local"
+        seats = o.get('seats', 0)
+        fare_amt = o.get('fare_amount', 0)
+        rev = o.get('revenue', 0)
+
+        row_data = [
+            (date_disp, align_center, font_td, None),
+            (taxi_reg, align_center, font_td_bold, None),
+            (driver_name, align_left, font_td, None),
+            (rank_name, align_left, font_td, None),
+            (route_name, align_left, font_td, None),
+            (trip_type, align_center, Font(name="Calibri", size=10, bold=is_ld, color="B45309" if is_ld else "475569"), None),
+            (seats, align_right, font_td, '#,##0'),
+            (fare_amt, align_right, font_td, '"R "#,##0.00'),
+            (rev, align_right, font_td_bold, '"R "#,##0.00'),
+        ]
+
+        for col_idx, (val, align, f_style, num_fmt) in enumerate(row_data, 1):
+            cell = ws.cell(row=cur_row, column=col_idx)
+            cell.value = val
+            cell.alignment = align
+            cell.font = f_style
+            cell.fill = row_fill
+            cell.border = thin_border
+            if num_fmt:
+                cell.number_format = num_fmt
+
+        cur_row += 1
+
+    # 6. Grand Total Row
+    ws.row_dimensions[cur_row].height = 28
+    ws.merge_cells(start_row=cur_row, start_column=1, end_row=cur_row, end_column=8)
+    total_lbl = ws.cell(row=cur_row, column=1)
+    total_lbl.value = "GRAND TOTAL FLEET REVENUE"
+    total_lbl.font = font_total
+    total_lbl.alignment = align_right
+    total_lbl.fill = fill_total
+    total_lbl.border = total_border
+
+    for c_idx in range(2, 9):
+        ws.cell(row=cur_row, column=c_idx).border = total_border
+        ws.cell(row=cur_row, column=c_idx).fill = fill_total
+
+    total_val = ws.cell(row=cur_row, column=9)
+    total_val.value = f"=SUM(I8:I{cur_row - 1})" if cur_row > 8 else total_rev
+    total_val.number_format = '"R "#,##0.00'
+    total_val.font = Font(name="Calibri", size=12, bold=True, color=COLOR_BRAND_EMERALD)
+    total_val.alignment = align_right
+    total_val.fill = fill_total
+    total_val.border = total_border
+
+    # 7. Column Auto-Widths with generous padding
+    min_widths = {
+        1: 20,  # Date
+        2: 18,  # Taxi
+        3: 20,  # Driver Name
+        4: 18,  # Rank
+        5: 26,  # Route
+        6: 16,  # Trip Type
+        7: 10,  # Seats
+        8: 16,  # Fare
+        9: 20,  # Revenue
+    }
+    for col_idx, min_w in min_widths.items():
+        col_letter = get_column_letter(col_idx)
+        max_len = min_w
+        for row in range(7, cur_row + 1):
+            val = ws.cell(row=row, column=col_idx).value
+            if val is not None:
+                max_len = max(max_len, len(str(val)) + 3)
+        ws.column_dimensions[col_letter].width = max(max_len, min_w)
+
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    fn = f"erank_revenue_{user['full_name'].replace(' ', '_')}.xlsx"
+    fn = f"erank_revenue_{owner_name.replace(' ', '_')}.xlsx"
     return StreamingResponse(
         buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{fn}"'})
