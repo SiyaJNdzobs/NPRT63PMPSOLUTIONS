@@ -12,11 +12,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db_name = os.environ.get('DB_NAME', 'erank')
+db = client[db_name]
 
-JWT_SECRET = os.environ['JWT_SECRET']
+JWT_SECRET = os.environ.get('JWT_SECRET', 'erank_secret_default_key_2026')
 JWT_ALG = 'HS256'
 APP_BASE_URL = os.environ.get('APP_BASE_URL', '')
 
