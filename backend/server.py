@@ -817,3 +817,22 @@ async def on_startup():
 async def on_shutdown():
     from core import client
     client.close()
+
+
+# Mount frontend static build for single-app cloud deployments
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+
+frontend_build_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "build")
+if os.path.exists(frontend_build_dir):
+    static_assets = os.path.join(frontend_build_dir, "static")
+    if os.path.exists(static_assets):
+        app.mount("/static", StaticFiles(directory=static_assets), name="static")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        file_path = os.path.join(frontend_build_dir, full_path)
+        if full_path and os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(frontend_build_dir, "index.html"))
