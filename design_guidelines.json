@@ -1,0 +1,79 @@
+{
+  "project_name": "E-RANK",
+  "archetype": "THE PERFORMANCE PRO / TACTICAL URBAN TRANSIT",
+  "theme": "Dark Mode Only",
+  "description": "A high-visibility, dark-mode taxi rank operations platform for South African minibus taxi ranks. Serves Admins, Owners, Marshals, Drivers, and Passengers with real-time queue management, QR scanning, fare updates, passenger safety lookup, and revenue export.",
+  "colors": {
+    "background_main": "#0A0D14",
+    "background_surface": "#121721",
+    "background_card": "#181F2C",
+    "background_card_hover": "#20293A",
+    "border_subtle": "#263144",
+    "border_accent": "#334155",
+    "primary_amber": "#F59E0B",
+    "primary_amber_bright": "#FBBF24",
+    "primary_amber_glow": "rgba(245, 158, 11, 0.15)",
+    "accent_emerald": "#10B981",
+    "accent_emerald_bright": "#34D399",
+    "accent_emerald_glow": "rgba(16, 185, 129, 0.15)",
+    "alert_crimson": "#EF4444",
+    "alert_crimson_glow": "rgba(239, 68, 68, 0.2)",
+    "text_primary": "#F9FAFB",
+    "text_secondary": "#9CA3AF",
+    "text_muted": "#6B7280",
+    "chart_gold": "#F59E0B",
+    "chart_emerald": "#10B981",
+    "chart_cyan": "#06B6D4",
+    "chart_purple": "#8B5CF6"
+  },
+  "typography": {
+    "font_family_heading": "Outfit, sans-serif",
+    "font_family_body": "Inter, sans-serif",
+    "font_family_mono": "JetBrains Mono, monospace",
+    "scales": {
+      "h1": "text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight text-white",
+      "h3": "text-xl sm:text-2xl font-semibold text-white",
+      "h4": "text-lg font-semibold text-slate-200",
+      "body_lg": "text-base text-slate-300 leading-relaxed",
+      "body": "text-sm text-slate-300 leading-normal",
+      "caption": "text-xs font-medium uppercase tracking-wider text-slate-400"
+    }
+  },
+  "layout_and_spacing": {
+    "philosophy": "Mobile-first, high-density tactical cards with 48px+ touch targets for rank pavement usability.",
+    "container_padding": "p-4 sm:p-6 lg:p-8",
+    "card_padding": "p-4 sm:p-6",
+    "gap_grid": "gap-4 sm:gap-6",
+    "border_radius": "rounded-xl",
+    "navigation_header": "sticky top-0 z-50 backdrop-blur-md bg-[#0A0D14]/85 border-b border-[#263144] px-4 py-3"
+  },
+  "component_strategies": {
+    "role_selector": "Pre-login role grid [Admin, Owner, Marshal, Driver, Passenger] with distinct tactical icons, glowing border state on active selection.",
+    "live_queue_board": "Realtime status board showing taxi queue order, vehicle reg number, driver photo, passenger count, departure status, and time joined.",
+    "qr_generator_modal": "High contrast black & gold QR display with download, print, regenerate, and rank perimeter geo-check toggle.",
+    "sos_button": "Big red high-visibility emergency trigger with double-confirmation modal for drivers in distress.",
+    "safe_taxi_lookup": "Passenger instant reg plate verification widget with verified checkmark badge, driver details, and 1-click public share link builder.",
+    "revenue_export": "Excel (.xlsx / .csv) revenue table export action for owners with date range filters."
+  },
+  "image_urls": {
+    "hero_minibus_van": "https://images.unsplash.com/photo-1630942324698-f531158b525b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwyfHxzb3V0aCUyMGFmcmljYSUyMG1pbmlidXMlMjB0YXhpJTIwcmFuayUyMHRyYW5zaXR8ZW58MHx8fHwxNzg5MDM3ODg0fDA&ixlib=rb-4.1.0&q=85",
+    "minibus_street": "https://images.unsplash.com/photo-1673959921686-23ecd30ff5ae?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHw0fHxzb3V0aCUyMGFmcmljYSUyMG1pbmlidXMlMjB0YXhpJTIwcmFuayUyMHRyYW5zaXR8ZW58MHx8fHwxNzg5MDM3ODg0fDA&ixlib=rb-4.1.0&q=85",
+    "minibus_city": "https://images.unsplash.com/photo-1698052841568-754047888dfb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwzfHxzb3V0aCUyMGFmcmljYSUyMG1pbmlidXMlMjB0YXhpJTIwcmFuayUyMHRyYW5zaXR8ZW58MHx8fHwxNzg5MDM3ODg0fDA&ixlib=rb-4.1.0&q=85",
+    "driver_avatar_1": "https://images.unsplash.com/photo-1512372923090-7b14fb496d44?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwzfHxzb3V0aCUyMGFmcmljYW4lMjBkcml2ZXIlMjBwb3J0cmFpdCUyMGJsYWNrJTIwbWFuJTIwc21pbGluZ3xlbnwwfHx8fDE3ODkwMzc4ODh8MA&ixlib=rb-4.1.0&q=85",
+    "driver_avatar_2": "https://images.unsplash.com/photo-1532437698276-c2ac365e7147?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwyfHxzb3V0aCUyMGFmcmljYW4lMjBkcml2ZXIlMjBwb3J0cmFpdCUyMGJsYWNrJTIwbWFuJTIwc21pbGluZ3xlbnwwfHx8fDE3ODkwMzc4ODh8MA&ixlib=rb-4.1.0&q=85"
+  },
+  "testing_and_accessibility": {
+    "data_testid_rule": "ALL interactive elements (buttons, inputs, tabs, modal controls, row actions, status indicators) MUST include data-testid attributes in kebab-case format.",
+    "touch_targets": "Minimum 48px height on mobile buttons and inputs.",
+    "contrast": "APCA compliant dark surface contrast. Text is always bright white (#F9FAFB) or amber/emerald accents against dark slate surfaces (#181F2C)."
+  },
+  "instructions_to_main_agent": [
+    "Follow Dark Mode Only palette specified in 'colors'. Do not render light background screens.",
+    "Implement explicit role-based UI flow: Landing Page -> Role Selection -> Login -> First-Login PIN Change -> Role Dashboard.",
+    "Role dashboards must include: Admin (all master data tables), Owner (taxis, drivers, revenue + Excel export), Marshal (queue board, QR generate/print, fares, rank posts, geo-check, long distance count), Driver (live queue rank position, QR scan, DEPART, SOS button), Passenger (Taxi Reg Search, verification badge, share link).",
+    "Provide live WebSocket/mock real-time queue syncing between Marshal queue controls and Driver position screen.",
+    "Add Sonner toasts and Success/Error modal components for every state-changing action.",
+    "Include data-testid on every interactive button, input, select, table row, badge, and tab."
+  ]
+}
