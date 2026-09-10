@@ -81,14 +81,13 @@ async def _upsert_user(query, doc, secret):
     must_change = doc.pop('must_change', True)
     existing = await db.users.find_one(query)
     if existing:
+        # Existing user: preserve their updated password and must_change status!
         doc.pop('id', None)
-        # Seeded accounts always restore to their documented credentials + first-login
-        # flag on startup, so the provided logins are guaranteed to keep working even if
-        # a previous run (e.g. automated QA) changed them.
-        doc['secret_hash'] = hash_secret(secret)
-        doc['must_change'] = must_change
+        doc.pop('secret_hash', None)
+        doc.pop('must_change', None)
         await db.users.update_one(query, {'$set': doc})
     else:
+        # First-time user creation: initialize secret and must_change flag
         doc['id'] = str(uuid.uuid4())
         doc['secret_hash'] = hash_secret(secret)
         doc['must_change'] = must_change
