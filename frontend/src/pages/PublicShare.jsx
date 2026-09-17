@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ShieldCheck, Bus, ArrowLeft, MapPin, Route as RouteIcon, User, Phone } from "lucide-react";
+import { ShieldCheck, Bus, ArrowLeft, MapPin, Route as RouteIcon, User, Phone, Copy, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { api, apiError } from "@/lib/api";
+import { toast } from "sonner";
 
 export default function PublicShare() {
   const { registration } = useParams();
@@ -17,6 +18,29 @@ export default function PublicShare() {
       .then((r) => setTaxi(r.data))
       .catch((e) => setErr(apiError(e)));
   }, [registration]);
+
+  const getShareUrl = () => {
+    if (taxi?.share_url && (taxi.share_url.startsWith("http://") || taxi.share_url.startsWith("https://"))) {
+      return taxi.share_url;
+    }
+    const origin = typeof window !== "undefined" && window.location.origin && window.location.origin !== "null"
+      ? window.location.origin
+      : "https://erank.onrender.com";
+    return `${origin}/t/${encodeURIComponent(taxi?.registration || registration)}`;
+  };
+
+  const copyShare = () => {
+    const url = getShareUrl();
+    navigator.clipboard.writeText(url);
+    toast.success("Share link copied to clipboard");
+  };
+
+  const shareWhatsApp = () => {
+    const url = getShareUrl();
+    const msg = `🚨 Safe Ride Details (E-RANK):\n\nTaxi: *${taxi?.registration || registration}*\n• Rank: ${taxi?.rank_name || "—"}\n• Route: ${taxi?.route || "—"}\n• Driver: ${taxi?.driver_name || "N/A"}\n• Driver Contact: ${taxi?.driver_contact || "N/A"}\n\nTrack or view verified ride info here:\n${url}`;
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <div className="min-h-screen bg-[#0A0D14] text-white flex flex-col">
@@ -65,6 +89,23 @@ export default function PublicShare() {
               <p className="text-[11px] text-slate-500 mt-6">
                 Shared by a passenger with their next of kin. Please keep this taxi and driver information safe.
               </p>
+              <div className="mt-5 flex flex-col sm:flex-row gap-2">
+                <Button
+                  onClick={shareWhatsApp}
+                  data-testid="share-whatsapp-btn"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold gap-2 h-10 text-sm"
+                >
+                  <MessageCircle size={16} /> Share on WhatsApp
+                </Button>
+                <Button
+                  onClick={copyShare}
+                  data-testid="copy-share-btn"
+                  variant="outline"
+                  className="flex-1 border-[#334155] text-slate-200 hover:bg-[#20293A] gap-2 h-10 text-sm"
+                >
+                  <Copy size={16} /> Copy link
+                </Button>
+              </div>
             </div>
           )}
         </Card>

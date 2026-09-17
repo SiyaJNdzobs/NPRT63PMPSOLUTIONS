@@ -303,7 +303,8 @@ async def public_taxi(registration: str):
         driver_contact = d.get('cell_phone') if d else None
     t['driver_contact'] = driver_contact
     t['verified'] = True
-    t['share_url'] = f"{APP_BASE_URL}/t/{t['registration'].replace(' ', '%20')}"
+    base = APP_BASE_URL.rstrip('/') if APP_BASE_URL else 'https://erank.onrender.com'
+    t['share_url'] = f"{base}/t/{t['registration'].replace(' ', '%20')}"
     return t
 
 

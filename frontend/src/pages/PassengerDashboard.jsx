@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ShieldCheck, Search, Copy, Bus, MapPin, Route as RouteIcon, Megaphone, User, Phone } from "lucide-react";
+import { ShieldCheck, Search, Copy, Bus, MapPin, Route as RouteIcon, Megaphone, User, Phone, MessageCircle, Share2 } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,10 +33,27 @@ export default function PassengerDashboard() {
     }
   };
 
+  const getShareUrl = () => {
+    if (taxi?.share_url && (taxi.share_url.startsWith("http://") || taxi.share_url.startsWith("https://"))) {
+      return taxi.share_url;
+    }
+    const origin = typeof window !== "undefined" && window.location.origin && window.location.origin !== "null"
+      ? window.location.origin
+      : "https://erank.onrender.com";
+    return `${origin}/t/${encodeURIComponent(taxi?.registration || "")}`;
+  };
+
   const copyShare = () => {
-    const url = taxi.share_url || `${window.location.origin}/t/${encodeURIComponent(taxi.registration)}`;
+    const url = getShareUrl();
     navigator.clipboard.writeText(url);
-    toast.success("Share link copied");
+    toast.success("Share link copied to clipboard");
+  };
+
+  const shareWhatsApp = () => {
+    const url = getShareUrl();
+    const msg = `🚨 Safe Ride Details (E-RANK):\n\nI am travelling in taxi *${taxi.registration}*.\n• Rank: ${taxi.rank_name}\n• Route: ${taxi.route}\n• Driver: ${taxi.driver_name || "N/A"}\n• Driver Contact: ${taxi.driver_contact || "N/A"}\n\nTrack or view verified ride info here:\n${url}`;
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -97,9 +114,23 @@ export default function PassengerDashboard() {
               </div>
             </div>
             <p className="text-[11px] text-slate-500 mt-4">Share this with your next of kin so they know which taxi and driver you are travelling with.</p>
-            <Button onClick={copyShare} data-testid="copy-share-btn" variant="outline" className="mt-6 w-full border-[#334155] text-slate-200 gap-2">
-              <Copy size={16} /> Copy public share link
-            </Button>
+            <div className="mt-6 flex flex-col sm:flex-row gap-2">
+              <Button
+                onClick={shareWhatsApp}
+                data-testid="share-whatsapp-btn"
+                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold gap-2 h-11"
+              >
+                <MessageCircle size={18} /> Share on WhatsApp
+              </Button>
+              <Button
+                onClick={copyShare}
+                data-testid="copy-share-btn"
+                variant="outline"
+                className="flex-1 border-[#334155] text-slate-200 hover:bg-[#20293A] gap-2 h-11"
+              >
+                <Copy size={16} /> Copy link
+              </Button>
+            </div>
           </Card>
         )}
 
