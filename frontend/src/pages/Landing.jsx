@@ -78,33 +78,98 @@ export default function Landing() {
         </section>
 
         {results && (
-          <section data-testid="search-results" className="space-y-4">
-            <h2 className="text-xl font-bold font-heading">Search results</h2>
-            <div className="grid sm:grid-cols-3 gap-4">
+          <section data-testid="search-results" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold font-heading">
+                Search results {results.matched_query ? `for "${results.matched_query}"` : ""}
+              </h2>
+              <span className="text-xs text-slate-400">
+                {results.ranks.length} ranks · {results.routes.length} routes · {results.taxis.length} taxis
+              </span>
+            </div>
+
+            {results.ranks.length > 0 && (
+              <div className="space-y-3">
+                <div className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                  📍 Matching Ranks ({results.ranks.length})
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {results.ranks.map((r) => (
+                    <Card key={r.rank_name} className="bg-[#181F2C] border-[#263144] p-5 flex flex-col justify-between gap-4">
+                      <div>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="font-bold text-lg text-white font-heading">{r.rank_name}</div>
+                          <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px]">Active Rank</Badge>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-sm text-slate-300 mt-1">
+                          <MapPin size={15} className="text-emerald-400 shrink-0" />
+                          <span>{r.location}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 pt-2 border-t border-[#263144]/60">
+                        {r.google_maps_url && (
+                          <a
+                            href={r.google_maps_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-cyan-400 hover:text-cyan-300 underline font-medium flex items-center gap-1"
+                          >
+                            🗺️ Open on Google Maps
+                          </a>
+                        )}
+                        {r.google_directions_url && (
+                          <a
+                            href={r.google_directions_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-auto text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded border border-slate-700"
+                          >
+                            Get Directions ➔
+                          </a>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid sm:grid-cols-2 gap-4">
               <Card className="bg-[#181F2C] border-[#263144] p-4">
-                <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">Ranks</div>
-                {results.ranks.length === 0 && <div className="text-slate-500 text-sm">None</div>}
-                {results.ranks.map((r) => (
-                  <div key={r.id} className="text-sm text-white py-1">{r.rank_name} · <span className="text-slate-400">{r.location}</span></div>
-                ))}
+                <div className="text-xs uppercase tracking-wider text-slate-400 mb-2 font-bold">
+                  🛣️ Operating Routes ({results.routes.length})
+                </div>
+                {results.routes.length === 0 && <div className="text-slate-500 text-sm py-2">No routes found</div>}
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {results.routes.map((r) => (
+                    <div key={r.id || `${r.rank_name}-${r.route}`} className="text-sm text-white py-1 flex items-center justify-between border-b border-[#263144]/40 last:border-0">
+                      <div>
+                        <span className="font-medium text-slate-200">{r.route}</span>
+                        <div className="text-xs text-slate-400">{r.rank_name}</div>
+                      </div>
+                      <span className="text-primary font-mono font-bold text-xs">{r.fare_label}</span>
+                    </div>
+                  ))}
+                </div>
               </Card>
+
               <Card className="bg-[#181F2C] border-[#263144] p-4">
-                <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">Routes</div>
-                {results.routes.length === 0 && <div className="text-slate-500 text-sm">None</div>}
-                {results.routes.map((r) => (
-                  <div key={r.id} className="text-sm text-white py-1">{r.route} <span className="text-primary font-mono">{r.fare_label}</span></div>
-                ))}
-              </Card>
-              <Card className="bg-[#181F2C] border-[#263144] p-4">
-                <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">Taxis</div>
-                {results.taxis.length === 0 && <div className="text-slate-500 text-sm">None</div>}
-                {results.taxis.map((t) => (
-                  <div key={t.registration} className="text-sm text-white py-1 flex items-center gap-2">
-                    <ShieldCheck size={14} className="text-emerald-400" />
-                    <span className="font-mono">{t.registration}</span>
-                    <span className="text-slate-400">{t.rank_name}</span>
-                  </div>
-                ))}
+                <div className="text-xs uppercase tracking-wider text-slate-400 mb-2 font-bold">
+                  🚐 Verified Taxis ({results.taxis.length})
+                </div>
+                {results.taxis.length === 0 && <div className="text-slate-500 text-sm py-2">No taxis found</div>}
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {results.taxis.map((t) => (
+                    <div key={t.registration} className="text-sm text-white py-1 flex items-center justify-between border-b border-[#263144]/40 last:border-0">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck size={14} className="text-emerald-400 shrink-0" />
+                        <span className="font-mono font-bold">{t.registration}</span>
+                        <span className="text-xs text-slate-400">({t.route || t.rank_name})</span>
+                      </div>
+                      <span className="text-xs text-primary font-mono">{t.fare_label || ""}</span>
+                    </div>
+                  ))}
+                </div>
               </Card>
             </div>
           </section>

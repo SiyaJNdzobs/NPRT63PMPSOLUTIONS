@@ -274,19 +274,80 @@ async def public_updates():
     return await db.rank_updates.find({'status': 'Active'}, PROJ).sort('created_at', -1).to_list(100)
 
 
+import difflib
+from urllib.parse import quote_plus
+
+
 @api.get("/public/search")
 async def public_search(q: str = ""):
     q = q.strip()
     if not q:
-        return {'ranks': [], 'routes': [], 'taxis': []}
+        return {'ranks': [], 'routes': [], 'taxis': [], 'matched_query': ''}
+
     rx = {'$regex': q, '$options': 'i'}
+
+    # 1. Exact / substring DB queries
     ranks = await db.ranks.find({'$or': [{'rank_name': rx}, {'location': rx}]},
                                 {'_id': 0, 'qr_token': 0}).to_list(50)
     routes = await db.routes.find({'$or': [{'route': rx}, {'rank_name': rx}]}, PROJ).to_list(50)
     taxis = await db.taxis.find({'$or': [{'registration': rx}, {'route': rx}, {'rank_name': rx}]},
                                 {'_id': 0, 'registration': 1, 'rank_name': 1, 'route': 1,
-                                 'fare_label': 1}).to_list(50)
-    return {'ranks': ranks, 'routes': routes, 'taxis': taxis}
+                                 'fare_label': 1, 'seats': 1, 'driver_name': 1}).to_list(50)
+
+    # 2. Fuzzy / Typo tolerance (e.g. "Johanesburg" -> "Johannesburg", "Kimberley" -> "Kimberly")
+    all_ranks = await db.ranks.find({}, {'_id': 0, 'qr_token': 0}).to_list(200)
+    existing_rank_names = {r['rank_name'] for r in ranks}
+    q_lower = q.lower()
+
+    for r in all_ranks:
+        if r['rank_name'] in existing_rank_names:
+            continue
+        loc_lower = (r.get('location') or '').lower()
+        name_lower = r['rank_name'].lower()
+        
+        # Check similarity of search word against rank name or location words
+        sim_name = difflib.SequenceMatcher(None, q_lower, name_lower).ratio()
+        sim_loc = difflib.SequenceMatcher(None, q_lower, loc_lower).ratio()
+        
+        words = loc_lower.split() + name_lower.split()
+        max_word_sim = max([difflib.SequenceMatcher(None, q_lower, w).ratio() for w in words], default=0)
+
+        if sim_name > 0.72 or sim_loc > 0.72 or max_word_sim > 0.78:
+            ranks.append(r)
+            existing_rank_names.add(r['rank_name'])
+
+    # 3. If ranks were found by location or name, pull the active routes & taxis operating at those ranks!
+    if ranks:
+        rank_names = [r['rank_name'] for r in ranks]
+        extra_routes = await db.routes.find({'rank_name': {'$in': rank_names}}, PROJ).to_list(100)
+        route_keys = {f"{r['rank_name']}--{r['route']}" for r in routes}
+        for er in extra_routes:
+            if f"{er['rank_name']}--{er['route']}" not in route_keys:
+                routes.append(er)
+                route_keys.add(f"{er['rank_name']}--{er['route']}")
+
+        extra_taxis = await db.taxis.find({'rank_name': {'$in': rank_names}},
+                                          {'_id': 0, 'registration': 1, 'rank_name': 1, 'route': 1,
+                                           'fare_label': 1, 'seats': 1, 'driver_name': 1}).to_list(100)
+        taxi_regs = {t['registration'] for t in taxis}
+        for et in extra_taxis:
+            if et['registration'] not in taxi_regs:
+                taxis.append(et)
+                taxi_regs.add(et['registration'])
+
+    # 4. Enrich rank cards with Google Maps links and coordinates for easy passenger navigation
+    for r in ranks:
+        name = r.get('rank_name', '')
+        loc = r.get('location', '')
+        # Direct Google Maps search / navigation link
+        query_text = f"{name}, {loc}, South Africa" if loc else f"{name}, South Africa"
+        r['google_maps_url'] = f"https://www.google.com/maps/search/?api=1&query={quote_plus(query_text)}"
+        if r.get('geo_lat') and r.get('geo_lng'):
+            r['google_directions_url'] = f"https://www.google.com/maps/dir/?api=1&destination={r['geo_lat']},{r['geo_lng']}"
+        else:
+            r['google_directions_url'] = r['google_maps_url']
+
+    return {'ranks': ranks, 'routes': routes, 'taxis': taxis, 'matched_query': q}
 
 
 @api.get("/public/taxi/{registration}")
@@ -1195,6 +1256,11 @@ passenger_dep = require_role('passenger')
 @api.get("/passenger/lookup")
 async def passenger_lookup(registration: str, user=Depends(passenger_dep)):
     return await public_taxi(registration)
+
+
+@api.get("/passenger/search")
+async def passenger_search(q: str = "", user=Depends(passenger_dep)):
+    return await public_search(q)
 
 
 app.include_router(api)

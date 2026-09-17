@@ -1,19 +1,43 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, UserCog, Bus } from "lucide-react";
+import { LogOut, UserCog, Bus, RefreshCw } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import { ProfileDialog } from "@/components/ProfileDialog";
+import { toast } from "sonner";
 
 const ROLE_LABEL = {
   admin: "Administrator", owner: "Owner", marshal: "Marshal",
   driver: "Driver", passenger: "Passenger",
 };
 
-export function AppHeader({ subtitle }) {
-  const { user, logout } = useAuth();
+export function AppHeader({ subtitle, onRefresh }) {
+  const { user, logout, refreshUser } = useAuth();
   const nav = useNavigate();
+  const qc = useQueryClient();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      if (onRefresh) {
+        await onRefresh();
+      }
+      if (qc) {
+        await qc.invalidateQueries();
+      }
+      if (refreshUser) {
+        await refreshUser();
+      }
+      toast.success("Dashboard data refreshed");
+    } catch {
+      toast.error("Failed to refresh");
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-md bg-[#0A0D14]/85 border-b border-[#263144] px-4 sm:px-6 py-3">
@@ -42,13 +66,25 @@ export function AppHeader({ subtitle }) {
                 <div className="text-sm text-white font-medium leading-none">{user.full_name}</div>
                 <div className="text-[11px] text-slate-400">{ROLE_LABEL[user.role]}</div>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                data-testid="dashboard-refresh-btn"
+                title="Refresh dashboard data"
+                className="border-[#334155] text-slate-200 hover:bg-[#20293A] gap-1.5 h-9 px-3"
+              >
+                <RefreshCw size={14} className={isRefreshing ? "animate-spin text-primary" : "text-slate-300"} />
+                <span className="hidden md:inline text-xs font-medium">Refresh</span>
+              </Button>
               {user.role !== "admin" || true ? (
                 <Button
                   variant="outline"
                   size="icon"
                   onClick={() => setProfileOpen(true)}
                   data-testid="open-profile-btn"
-                  className="border-[#334155] text-slate-200 hover:bg-[#20293A]"
+                  className="border-[#334155] text-slate-200 hover:bg-[#20293A] h-9 w-9"
                 >
                   <UserCog size={18} />
                 </Button>
