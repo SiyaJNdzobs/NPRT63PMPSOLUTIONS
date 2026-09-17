@@ -1,10 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { ShieldCheck, Search, Copy, Bus, MapPin, Route as RouteIcon, Megaphone, User, Phone, MessageCircle, Share2, ExternalLink, Navigation } from "lucide-react";
+import {
+  ShieldCheck, Search, Copy, Bus, MapPin, Route as RouteIcon, Megaphone,
+  User, Phone, MessageCircle, Share2, ExternalLink, Navigation, LocateFixed, Radio, Check, X,
+} from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
 import { api, apiError } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -15,6 +21,55 @@ export default function PassengerDashboard() {
   const [busy, setBusy] = useState(false);
   const [updates, setUpdates] = useState([]);
 
+  // Bolt-style Passenger Live Location Sharing states
+  const [locationConsent, setLocationConsent] = useState(() => {
+    return localStorage.getItem("erank_location_consent") || "unset";
+  });
+  const [consentModalOpen, setConsentModalOpen] = useState(false);
+  const [currentCoords, setCurrentCoords] = useState(null);
+  const [trackingActive, setTrackingActive] = useState(false);
+
+  const startLocationTracking = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported by your browser");
+      return;
+    }
+    setTrackingActive(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCurrentCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      (err) => console.warn("Geo error:", err),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        setCurrentCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      (err) => console.warn("Geo watch error:", err),
+      { enableHighAccuracy: true, maximumAge: 10000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  };
+
+  const acceptLocation = () => {
+    localStorage.setItem("erank_location_consent", "granted");
+    setLocationConsent("granted");
+    setConsentModalOpen(false);
+    startLocationTracking();
+    toast.success("Live location sharing enabled for your safety!");
+  };
+
+  const declineLocation = () => {
+    localStorage.setItem("erank_location_consent", "denied");
+    setLocationConsent("denied");
+    setConsentModalOpen(false);
+    setTrackingActive(false);
+    toast.info("Location sharing declined. Next of kin will see taxi & driver info only.");
+  };
+
   const loadUpdates = async () => {
     try {
       const { data } = await api.get("/public/updates");
@@ -24,7 +79,35 @@ export default function PassengerDashboard() {
 
   useEffect(() => {
     loadUpdates();
+    const savedConsent = localStorage.getItem("erank_location_consent");
+    if (!savedConsent || savedConsent === "unset") {
+      // Prompt passenger to accept or decline location sharing when entering app
+      setConsentModalOpen(true);
+    } else if (savedConsent === "granted") {
+      startLocationTracking();
+    }
   }, []);
+
+  // Broadcast live location to backend when passenger has chosen a taxi
+  useEffect(() => {
+    if (!taxi?.registration || !currentCoords || locationConsent !== "granted") return;
+
+    const pushLocation = async () => {
+      try {
+        await api.post(`/public/taxi/${encodeURIComponent(taxi.registration)}/live-location`, {
+          latitude: currentCoords.lat,
+          longitude: currentCoords.lng,
+          passenger_name: "Passenger",
+        });
+      } catch (e) {
+        console.error("Failed to push live ride location", e);
+      }
+    };
+
+    pushLocation();
+    const interval = setInterval(pushLocation, 15000);
+    return () => clearInterval(interval);
+  }, [taxi?.registration, currentCoords, locationConsent]);
 
   const handleSearch = async (e) => {
     e?.preventDefault();
@@ -105,6 +188,43 @@ export default function PassengerDashboard() {
           <p className="text-slate-400 text-sm mt-1">
             Search by taxi registration, rank name, or city/location (e.g. <span className="text-primary font-mono font-medium">Johannesburg</span>, <span className="text-primary font-mono font-medium">MTN Rank</span>, or <span className="text-primary font-mono font-medium">MT 004 GP</span>).
           </p>
+        </div>
+
+        {/* Bolt-style Live Location Sharing Status Bar */}
+        <div className="flex items-center justify-between p-3.5 rounded-xl border border-[#263144] bg-[#181F2C] text-sm" data-testid="location-status-bar">
+          <div className="flex items-center gap-3">
+            <div className={`h-8 w-8 rounded-full flex items-center justify-center ${locationConsent === "granted" ? "bg-emerald-500/20 text-emerald-400 animate-pulse" : "bg-slate-700/50 text-slate-400"}`}>
+              <LocateFixed size={18} />
+            </div>
+            <div>
+              <div className="font-medium text-xs sm:text-sm text-white flex items-center gap-2">
+                <span>Live Location Sharing (Bolt-Style):</span>
+                {locationConsent === "granted" ? (
+                  <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[10px]">
+                    Active · Tracking Phone GPS
+                  </Badge>
+                ) : (
+                  <Badge className="bg-slate-700 text-slate-300 text-[10px]">
+                    Disabled
+                  </Badge>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {locationConsent === "granted"
+                  ? "Next-of-kin will see your phone's live location on Google Maps."
+                  : "Next-of-kin sees taxi and driver info only (no GPS location)."}
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setConsentModalOpen(true)}
+            className="text-xs border-[#334155] text-slate-300 hover:bg-[#20293A] shrink-0"
+            data-testid="toggle-location-consent-btn"
+          >
+            {locationConsent === "granted" ? "Change" : "Enable"}
+          </Button>
         </div>
 
         <Card className="bg-[#181F2C] border-[#263144] p-5">
@@ -248,10 +368,23 @@ export default function PassengerDashboard() {
                 <span className="text-slate-400 w-16">Rank</span>
                 <span className="text-white font-medium">{taxi.rank_name}</span>
               </div>
-              <div className="flex items-center gap-3 text-sm">
-                <RouteIcon className="text-primary" size={18} />
-                <span className="text-slate-400 w-16">Route</span>
-                <span className="text-white font-medium">{taxi.route}</span>
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <div className="flex items-center gap-3">
+                  <RouteIcon className="text-primary" size={18} />
+                  <span className="text-slate-400 w-16">Route</span>
+                  <span className="text-white font-medium">{taxi.route}</span>
+                </div>
+                {taxi.route && (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((taxi.rank_name || "") + " to " + taxi.route)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1 bg-cyan-950/40 border border-cyan-500/30 px-2 py-1 rounded"
+                    title="Open route in Google Maps"
+                  >
+                    <ExternalLink size={11} /> Google Maps Route
+                  </a>
+                )}
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <User className="text-cyan-400" size={18} />
@@ -264,6 +397,27 @@ export default function PassengerDashboard() {
                 <span className="text-white font-medium font-mono">{taxi.driver_contact || "—"}</span>
               </div>
             </div>
+
+            {locationConsent === "granted" && currentCoords && (
+              <div className="mt-4 p-3 rounded-lg bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-xs text-emerald-300 font-medium">Your phone's live location is being broadcast for your next of kin</span>
+                </div>
+                <a
+                  href={`https://www.google.com/maps?q=${currentCoords.lat},${currentCoords.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs bg-emerald-600 hover:bg-emerald-500 text-black font-bold px-2.5 py-1 rounded flex items-center gap-1 shrink-0"
+                >
+                  <MapPin size={12} /> See Location
+                </a>
+              </div>
+            )}
+
             <p className="text-[11px] text-slate-500 mt-4">Share this with your next of kin so they know which taxi and driver you are travelling with.</p>
             <div className="mt-6 flex flex-col sm:flex-row gap-2">
               <Button
@@ -303,6 +457,60 @@ export default function PassengerDashboard() {
           </div>
         )}
       </main>
+
+      {/* Bolt-style Location Sharing Permission Prompt */}
+      <Dialog open={consentModalOpen} onOpenChange={setConsentModalOpen}>
+        <DialogContent className="bg-[#181F2C] border-[#263144] text-white max-w-md">
+          <DialogHeader>
+            <div className="h-12 w-12 rounded-full bg-primary/20 text-primary flex items-center justify-center mb-2 mx-auto">
+              <LocateFixed size={28} />
+            </div>
+            <DialogTitle className="text-center text-xl font-bold font-heading text-white">
+              Share Your Live Location with Next of Kin?
+            </DialogTitle>
+            <DialogDescription className="text-center text-slate-300 text-sm mt-1">
+              Just like Bolt, E-RANK can broadcast your phone's live GPS coordinates when you share your ride with your family or next of kin.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs text-slate-300">
+            <div className="p-3 bg-[#0A0D14] rounded-lg border border-[#263144] space-y-2">
+              <div className="flex items-start gap-2">
+                <span className="text-emerald-400 font-bold">✓</span>
+                <span><strong>100% Free:</strong> Uses standard Google Maps web links without paid subscriptions.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-emerald-400 font-bold">✓</span>
+                <span><strong>Tracks YOUR phone:</strong> Next of kin sees where your phone is on the map, not the driver's phone.</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="text-emerald-400 font-bold">✓</span>
+                <span><strong>Emergency safety:</strong> In case of detour or emergency, your family has your exact live coordinates.</span>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-[#263144]">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={declineLocation}
+              className="flex-1 border-[#334155] text-slate-300 hover:bg-slate-800"
+              data-testid="decline-location-btn"
+            >
+              <X size={15} className="mr-1" /> Decline
+            </Button>
+            <Button
+              type="button"
+              onClick={acceptLocation}
+              className="flex-1 bg-primary text-black hover:bg-primary/90 font-bold"
+              data-testid="accept-location-btn"
+            >
+              <Check size={15} className="mr-1" /> Accept & Share Location
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

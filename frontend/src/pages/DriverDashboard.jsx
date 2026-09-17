@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bus, AlertTriangle, MapPin, Loader2, Camera, Users, ListOrdered, CheckCircle2 } from "lucide-react";
+import { Bus, AlertTriangle, MapPin, Loader2, Camera, Users, ListOrdered, CheckCircle2, RefreshCw } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -31,6 +31,16 @@ export default function DriverDashboard() {
   });
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["driver-status"] });
+
+  const dismissNotification = async (notifId) => {
+    try {
+      await api.post(`/driver/notifications/${notifId}/read`);
+      refresh();
+      toast.success("Notification acknowledged");
+    } catch (e) {
+      console.error("Could not mark notification as read", e);
+    }
+  };
 
   const extractToken = (raw) => {
     if (!raw) return "";
@@ -98,12 +108,69 @@ export default function DriverDashboard() {
     <div className="min-h-screen bg-[#0A0D14] text-white">
       <AppHeader />
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        <div>
-          <h1 className="text-2xl font-extrabold font-heading">Driver operations</h1>
-          <p className="text-slate-400 text-sm mt-1">
-            Assigned rank: <span className="text-white font-medium">{status?.assigned_rank || "—"}</span>
-          </p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-extrabold font-heading">Driver operations</h1>
+            <p className="text-slate-400 text-sm mt-1">
+              Assigned rank: <span className="text-white font-medium">{status?.assigned_rank || "—"}</span>
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={refresh}
+            data-testid="driver-refresh-btn"
+            className="border-[#263144] hover:bg-[#181F2C] text-slate-300 gap-1.5 shrink-0"
+            title="Refresh latest queue and status"
+          >
+            <RefreshCw size={14} /> Refresh
+          </Button>
         </div>
+
+        {/* In-App Driver Notifications (e.g. Queue Skipped Reason from Marshal) */}
+        {status?.notifications && status.notifications.length > 0 && (
+          <div className="space-y-3" data-testid="driver-notifications-container">
+            {status.notifications.map((notif) => (
+              <div
+                key={notif.id}
+                className="bg-gradient-to-r from-amber-950/60 via-[#1F1912] to-[#181F2C] border border-amber-500/50 rounded-xl p-4 shadow-lg text-white space-y-2 animate-in fade-in"
+                data-testid={`driver-notification-${notif.id}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="h-9 w-9 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <AlertTriangle size={20} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-amber-300 text-sm">{notif.title || "Queue Notification"}</span>
+                        <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px]">Important</Badge>
+                      </div>
+                      <p className="text-xs text-slate-200 mt-1 leading-relaxed">
+                        {notif.message}
+                      </p>
+                      {notif.reason && (
+                        <div className="mt-2 bg-black/40 border border-amber-500/20 rounded-md p-2.5 text-xs text-amber-200">
+                          <span className="text-slate-400">Reason given by Marshal:</span>{" "}
+                          <span className="font-medium">"{notif.reason}"</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => dismissNotification(notif.id)}
+                    className="border-amber-500/40 text-amber-300 hover:bg-amber-500/20 text-xs shrink-0 h-8 gap-1"
+                    data-testid={`dismiss-notification-${notif.id}`}
+                  >
+                    <CheckCircle2 size={14} /> Got it
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {taxi && (
           <Card className="bg-[#181F2C] border-[#263144] p-6" data-testid="driver-status-card">

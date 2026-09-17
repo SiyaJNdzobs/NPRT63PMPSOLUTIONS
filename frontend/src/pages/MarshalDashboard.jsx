@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   QrCode, Download, Printer, RefreshCw, Plus, Megaphone, Trash2,
-  MapPin, Users, Save, CheckCircle2, AlertCircle,
+  MapPin, Users, Save, CheckCircle2, AlertCircle, SkipForward,
 } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,12 @@ export default function MarshalDashboard() {
   const [manifestPax, setManifestPax] = useState([]);
   const [savingManifest, setSavingManifest] = useState(false);
 
+  // Skip taxi state
+  const [skipOpen, setSkipOpen] = useState(false);
+  const [skipTaxi, setSkipTaxi] = useState(null);
+  const [skipReason, setSkipReason] = useState("");
+  const [skipping, setSkipping] = useState(false);
+
   const rankQ = useQuery({ queryKey: ["m-rank"], queryFn: async () => (await api.get("/marshal/rank")).data, refetchInterval: 5000 });
   const queueQ = useQuery({ queryKey: ["m-queue"], queryFn: async () => (await api.get("/marshal/queue")).data, refetchInterval: 3000 });
   const routesQ = useQuery({ queryKey: ["m-routes"], queryFn: async () => (await api.get("/marshal/routes")).data });
@@ -46,6 +52,38 @@ export default function MarshalDashboard() {
       qc.invalidateQueries({ queryKey: ["m-queue"] });
     } catch (e) {
       setResult({ type: "error", title: "Cannot add taxi", message: apiError(e) });
+    }
+  };
+
+  const openSkipModal = (entry) => {
+    setSkipTaxi(entry);
+    setSkipReason("");
+    setSkipOpen(true);
+  };
+
+  const submitSkip = async () => {
+    if (!skipTaxi) return;
+    if (!skipReason.trim()) {
+      toast.error("Please provide a reason for skipping this taxi.");
+      return;
+    }
+    setSkipping(true);
+    try {
+      await api.post("/marshal/queue/skip", {
+        registration: skipTaxi.taxi_registration,
+        reason: skipReason.trim(),
+      });
+      setSkipOpen(false);
+      setResult({
+        type: "success",
+        title: "Taxi Skipped in Queue",
+        message: `Taxi ${skipTaxi.taxi_registration} was moved back 1 position. An in-app notification with your reason was sent to the driver.`,
+      });
+      qc.invalidateQueries({ queryKey: ["m-queue"] });
+    } catch (e) {
+      setResult({ type: "error", title: "Cannot skip taxi", message: apiError(e) });
+    } finally {
+      setSkipping(false);
     }
   };
 
@@ -308,6 +346,16 @@ export default function MarshalDashboard() {
                                 <Users size={13} /> {e.long_distance_passengers?.length > 0 ? "Edit Pax" : "Capture Pax"}
                               </Button>
                             )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openSkipModal(e)}
+                              data-testid={`marshal-skip-btn-${e.taxi_registration.replace(/\s+/g, '-')}`}
+                              className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10 text-xs h-8 gap-1"
+                              title="Skip taxi in queue and notify driver"
+                            >
+                              <SkipForward size={13} /> Skip
+                            </Button>
                             <Button size="sm" onClick={() => onDepart(e)} data-testid="marshal-depart-btn" className="bg-primary text-black hover:bg-primary/90 text-xs h-8">Depart</Button>
                           </div>
                         </td>
@@ -534,6 +582,58 @@ export default function MarshalDashboard() {
                 <CheckCircle2 size={15} /> Save & Depart
               </Button>
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Skip Taxi Modal */}
+      <Dialog open={skipOpen} onOpenChange={setSkipOpen}>
+        <DialogContent className="bg-[#181F2C] border-[#263144] text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-400">
+              <SkipForward size={20} /> Skip Taxi in Queue
+            </DialogTitle>
+            <DialogDescription className="text-slate-400 text-sm">
+              Moving <span className="font-mono font-bold text-white">{skipTaxi?.taxi_registration}</span> ({skipTaxi?.driver_name}) back 1 position in queue. The driver will receive an in-app notification with your reason.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div>
+              <Label className="text-xs text-slate-300 mb-1 block">
+                Reason for skipping (e.g. Taxi not at rank, driver away, vehicle issue) *
+              </Label>
+              <Textarea
+                value={skipReason}
+                onChange={(e) => setSkipReason(e.target.value)}
+                placeholder="Enter the reason why this taxi is being skipped..."
+                className="bg-[#0A0D14] border-[#263144] text-white text-sm min-h-[90px]"
+                data-testid="marshal-skip-reason-input"
+              />
+            </div>
+            <div className="rounded-md bg-amber-500/10 border border-amber-500/20 p-2.5 text-xs text-amber-300/90">
+              ⚠️ The next taxi in line will advance to position #{skipTaxi?.position}, and this taxi will be bumped down one spot.
+            </div>
+          </div>
+
+          <DialogFooter className="flex justify-end gap-2 pt-2 border-t border-[#263144]">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSkipOpen(false)}
+              className="border-[#334155] text-slate-300"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={submitSkip}
+              disabled={skipping || !skipReason.trim()}
+              data-testid="marshal-confirm-skip-btn"
+              className="bg-amber-500 hover:bg-amber-400 text-black font-semibold gap-1.5"
+            >
+              {skipping ? "Skipping…" : "Skip & Notify Driver"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
