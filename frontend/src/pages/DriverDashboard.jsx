@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bus, AlertTriangle, MapPin, Loader2, Camera } from "lucide-react";
+import { Bus, AlertTriangle, MapPin, Loader2, Camera, Users, ListOrdered, CheckCircle2 } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -163,6 +163,100 @@ export default function DriverDashboard() {
             )}
           </Card>
         )}
+
+        {/* Rank Queue Board */}
+        <Card className="bg-[#181F2C] border-[#263144] p-5" data-testid="driver-queue-board-card">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-emerald-500/15 flex items-center justify-center text-emerald-400">
+                <ListOrdered size={18} />
+              </div>
+              <div>
+                <h2 className="font-bold text-white text-base leading-tight">
+                  {status?.assigned_rank || "Rank"} Queue
+                </h2>
+                <p className="text-[11px] text-slate-400">
+                  Live queue for your assigned rank ({status?.queue?.length ?? 0} taxis)
+                </p>
+              </div>
+            </div>
+            <Badge className="bg-slate-800 text-slate-300 border-slate-700 text-[10px]">
+              Live updates
+            </Badge>
+          </div>
+
+          <div className="rounded-lg border border-[#263144] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-[#121721] text-slate-400 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-3 py-2.5 text-left w-12">#</th>
+                    <th className="px-3 py-2.5 text-left">Taxi</th>
+                    <th className="px-3 py-2.5 text-left">Driver</th>
+                    <th className="px-3 py-2.5 text-left">Route</th>
+                    <th className="px-3 py-2.5 text-right">Fare</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#263144]">
+                  {!status?.queue || status.queue.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-sm">
+                        No taxis currently waiting in this rank's queue.
+                      </td>
+                    </tr>
+                  ) : (
+                    status.queue.map((qItem) => {
+                      const isMe = qItem.taxi_registration === taxi?.registration;
+                      return (
+                        <tr
+                          key={qItem.id}
+                          className={`transition-colors ${
+                            isMe
+                              ? "bg-emerald-500/15 border-l-4 border-l-emerald-400 hover:bg-emerald-500/20"
+                              : "hover:bg-[#20293A]/50"
+                          }`}
+                          data-testid={`driver-queue-row-${qItem.taxi_registration.replace(/\s+/g, "-")}`}
+                        >
+                          <td className="px-3 py-3 font-mono font-bold">
+                            <span className={isMe ? "text-emerald-400" : "text-slate-400"}>
+                              #{qItem.position}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 font-mono font-semibold text-white">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span>{qItem.taxi_registration}</span>
+                              {isMe && (
+                                <Badge className="bg-emerald-500 text-black font-bold text-[9px] px-1 py-0 h-4">
+                                  YOU
+                                </Badge>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-slate-300 text-xs sm:text-sm">
+                            {qItem.driver_name || "—"}
+                          </td>
+                          <td className="px-3 py-3 text-slate-300 text-xs sm:text-sm">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span>{qItem.route}</span>
+                              {qItem.long_distance && (
+                                <Badge className="bg-primary/15 text-primary border-primary/30 text-[9px] px-1 py-0 h-4">
+                                  LD
+                                </Badge>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-right font-mono text-primary font-medium text-xs sm:text-sm">
+                            {qItem.fare_label}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Card>
 
         <div className="grid grid-cols-1 gap-3">
           {inQueue && status?.long_distance ? (

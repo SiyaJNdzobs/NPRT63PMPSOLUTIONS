@@ -977,7 +977,16 @@ async def driver_status(user=Depends(driver_dep)):
         'queue_length': len(entries),
         'long_distance': is_long_distance(taxi['route']),
         'entry': mine,
+        'queue': entries,
     }
+
+
+@api.get("/driver/queue")
+async def driver_queue(user=Depends(driver_dep)):
+    taxi = await driver_taxi(user)
+    if not taxi:
+        raise HTTPException(status_code=404, detail="No taxi assigned to you.")
+    return await queue_snapshot(taxi['rank_name'])
 
 
 @api.post("/driver/join")
