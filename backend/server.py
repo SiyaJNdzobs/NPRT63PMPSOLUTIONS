@@ -58,6 +58,62 @@ def make_qr(data: str) -> str:
     return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
 
 
+GENERIC_RANK_WORDS = {'rank', 'taxi', 'the', 'and', 'to', 'station', 'stop', 'interchange', 'terminal', 'center', 'centre'}
+
+
+def rank_matches_route(rank_doc: dict, taxi_home_rank: str, taxi_route: str) -> bool:
+    """
+    Checks if a rank is valid for a taxi:
+    - Always allows the taxi's home/assigned rank.
+    - For long-distance taxis: matches by rank name, city/location, or route keywords
+      so taxis can join and operate back-and-forth in either rank.
+    """
+    if not rank_doc:
+        return False
+    s_name = (rank_doc.get('rank_name') or '').strip().lower()
+    s_loc = (rank_doc.get('location') or '').strip().lower()
+    h_rank = (taxi_home_rank or '').strip().lower()
+    route = (taxi_route or '').strip().lower()
+
+    # 1. Exact match with home rank name (always allowed)
+    if s_name == h_rank or s_name in h_rank or h_rank in s_name:
+        return True
+
+    # Local taxis are strictly restricted to their home rank
+    if not is_long_distance(taxi_route):
+        return False
+
+    # 2. Scanned rank name appears in route, or route appears in scanned rank name
+    if s_name and (s_name in route or route in s_name):
+        return True
+
+    # 3. Scanned rank location / city appears in route (e.g. "Johannesburg", "Kimberly", "Mthatha", "Eastern Cape", "Mpumalanga")
+    if s_loc and (s_loc in route or route in s_loc):
+        return True
+
+    # 4. Match non-generic keywords from the rank name against the route
+    # e.g., "uNcedo Rank" -> "uncedo", "Swazi Rank" -> "swazi", "MTN Rank" -> "mtn", "Wandaras" -> "wandaras"
+    s_tokens = [w for w in re.findall(r'[a-zA-Z0-9]+', s_name) if w not in GENERIC_RANK_WORDS and len(w) >= 3]
+    for token in s_tokens:
+        if token in route:
+            return True
+
+    # 5. Match location/city tokens against the route
+    loc_tokens = [w for w in re.findall(r'[a-zA-Z0-9]+', s_loc) if w not in GENERIC_RANK_WORDS and len(w) >= 3]
+    for token in loc_tokens:
+        if token in route:
+            return True
+
+    # 6. Match route tokens against the scanned rank name or location
+    # e.g. route has "uncedo" or "wandaras" or "kimberly" or "mthatha"
+    route_tokens = [w for w in re.findall(r'[a-zA-Z0-9]+', route) if w not in GENERIC_RANK_WORDS and len(w) >= 3]
+    for token in route_tokens:
+        if token in s_name or (s_loc and token in s_loc):
+            return True
+
+    return False
+
+
 async def queue_snapshot(rank_name: str):
     entries = await db.queue.find({'rank_name': rank_name}, PROJ).sort('joined_at', 1).to_list(500)
     for i, e in enumerate(entries):
@@ -1043,16 +1099,23 @@ async def marshal_queue_add(body: QueueAddIn, user=Depends(marshal_dep)):
     taxi = await db.taxis.find_one({'registration': {'$regex': f'^{reg}$', '$options': 'i'}})
     if not taxi:
         raise HTTPException(status_code=404, detail="No taxi found with that registration.")
-    if taxi['rank_name'] != user['rank_name']:
-        raise HTTPException(status_code=400, detail="That taxi does not belong to your rank.")
+
+    marshal_rank = user['rank_name']
+    marshal_rank_doc = await db.ranks.find_one({'rank_name': marshal_rank})
+    if not rank_matches_route(marshal_rank_doc or {'rank_name': marshal_rank}, taxi['rank_name'], taxi['route']):
+        raise HTTPException(status_code=400, detail="That taxi does not belong to or travel to your rank.")
+
     if taxi.get('active_queue'):
         raise HTTPException(status_code=400, detail="This taxi is already in the queue.")
+
+    taxi_is_ld = is_long_distance(taxi['route'])
     entry = {'id': str(uuid.uuid4()), 'taxi_registration': taxi['registration'],
-             'rank_name': taxi['rank_name'], 'driver_id': taxi.get('driver_id'),
+             'rank_name': marshal_rank, 'home_rank_name': taxi['rank_name'],
+             'driver_id': taxi.get('driver_id'),
              'driver_name': taxi.get('driver_name'), 'owner_name': taxi.get('owner_name'),
              'route': taxi['route'], 'seats': taxi['seats'],
              'fare_amount': taxi['fare_amount'], 'fare_label': taxi['fare_label'],
-             'long_distance': is_long_distance(taxi['route']),
+             'long_distance': taxi_is_ld,
              'status': 'waiting', 'joined_at': now_iso(), 'added_by': 'marshal'}
     await db.queue.insert_one(entry)
     # If this is a long‑distance route, create a pending long‑distance request linked to the queue entry
@@ -1061,7 +1124,7 @@ async def marshal_queue_add(body: QueueAddIn, user=Depends(marshal_dep)):
             'id': str(uuid.uuid4()),
             'queue_id': entry['id'],
             'taxi_registration': taxi['registration'],
-            'rank_name': taxi['rank_name'],
+            'rank_name': marshal_rank,
             'driver_name': taxi.get('driver_name') or 'Driver',
             'route': taxi['route'],
             'seat_count': taxi['seats'],
@@ -1298,31 +1361,24 @@ async def driver_join(body: JoinIn, user=Depends(driver_dep)):
 
     # --- Dual-rank check for long-distance taxis ---
     # Long-distance taxis can scan into EITHER their home rank OR the destination rank
-    # (the other rank name in the route string, separated by ↔ or →).
+    # (matching by rank name, city name, or route keywords).
     taxi_home_rank = taxi['rank_name']
     scanned_rank = rank['rank_name']
     taxi_is_long_distance = is_long_distance(taxi['route'])
 
-    allowed_ranks = {taxi_home_rank}
-    if taxi_is_long_distance:
-        # For long-distance taxis: allow ANY rank whose name appears anywhere in the route string.
-        # This covers routes stored as "Wandaras Johannesburg to Indian Center Kimberley",
-        # "Johannesburg ↔ Kimberley", "Wandaras → Uncedo", or any other format.
-        route_lower = taxi['route'].lower()
-        all_ranks_cursor = db.ranks.find({}, {'rank_name': 1, '_id': 0})
-        async for r in all_ranks_cursor:
-            rn = r['rank_name']
-            if rn.lower() in route_lower:
-                allowed_ranks.add(rn)
-        # Also add any raw token from the route split on common separators
-        for sep_part in re.split(r'[↔→\-]|\bto\b', taxi['route'], flags=re.IGNORECASE):
-            allowed_ranks.add(sep_part.strip())
+    if not rank_matches_route(rank, taxi_home_rank, taxi['route']):
+        # Find all actual ranks in the database matching this taxi's route for clear error display
+        allowed_ranks = {taxi_home_rank}
+        if taxi_is_long_distance:
+            all_ranks_cursor = db.ranks.find({}, {'rank_name': 1, 'location': 1, '_id': 0})
+            async for r in all_ranks_cursor:
+                if rank_matches_route(r, taxi_home_rank, taxi['route']):
+                    allowed_ranks.add(r['rank_name'])
 
-    if scanned_rank not in allowed_ranks:
+        ranks_str = " and ".join(sorted(allowed_ranks))
         raise HTTPException(
             status_code=400,
-            detail=f"Wrong rank. Your taxi route does not include {scanned_rank}. "
-                   f"Allowed ranks for this taxi: {', '.join(sorted(r for r in allowed_ranks if r))}."
+            detail=f"Wrong rank. Your taxi route operates between {ranks_str}. It cannot join at {scanned_rank}."
         )
 
     # Use the scanned rank for queue entry so revenue is recorded at the correct rank
