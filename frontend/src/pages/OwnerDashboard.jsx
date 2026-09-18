@@ -73,7 +73,23 @@ export default function OwnerDashboard() {
     <div className="min-h-screen bg-[#0A0D14] text-white">
       <AppHeader />
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        <h1 className="text-2xl font-extrabold font-heading">Owner dashboard</h1>
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-2xl font-extrabold font-heading">Owner dashboard</h1>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              qc.invalidateQueries({ queryKey: ["o-taxis"] });
+              qc.invalidateQueries({ queryKey: ["o-rev"] });
+              toast.success("Owner data refreshed");
+            }}
+            data-testid="owner-refresh-btn"
+            className="border-[#263144] hover:bg-[#181F2C] text-slate-300 gap-1.5 shrink-0"
+            title="Refresh latest taxis and revenue"
+          >
+            <RefreshCw size={14} /> Refresh
+          </Button>
+        </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Stat icon={Bus} label="Taxis" value={taxis.length} color="text-primary" />

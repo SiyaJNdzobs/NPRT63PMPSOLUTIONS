@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Sparkles, X, Send, Mic, MicOff, Volume2, VolumeX,
-  Bot, User as UserIcon, Loader2, Globe, RotateCcw,
+  MessageSquare, User as UserIcon, Loader2, Globe, RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ const LANGUAGES = [
 
 export function AiAssistant() {
   const { user } = useAuth();
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [language, setLanguage] = useState("English");
   const [inputMessage, setInputMessage] = useState("");
@@ -31,6 +33,12 @@ export function AiAssistant() {
 
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
+
+  // Must NOT be shown on the public link shared with next of kin (/t/:registration)
+  const isPublicSharePage = location.pathname.startsWith("/t/");
+  if (isPublicSharePage) {
+    return null;
+  }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -205,7 +213,7 @@ export function AiAssistant() {
           title="Open E-RANK AI Assistant"
         >
           <div className="relative">
-            <Bot size={22} />
+            <MessageSquare size={22} className="fill-black/15" />
             <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-black opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-700"></span>

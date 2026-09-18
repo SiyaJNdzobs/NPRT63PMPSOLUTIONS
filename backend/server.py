@@ -303,6 +303,10 @@ async def public_search(q: str = ""):
     if not q:
         return {'ranks': [], 'routes': [], 'taxis': [], 'matched_query': ''}
 
+    ranks = []
+    routes = []
+    taxis = []
+
     rx = {'$regex': q, '$options': 'i'}
 
     # 1b. Check if query contains origin-to-destination pattern (e.g. "Kimberley to Johannesburg" or "Kimberley - Johannesburg")
@@ -315,15 +319,19 @@ async def public_search(q: str = ""):
         kw_regexes = [{'route': {'$regex': kw, '$options': 'i'}} for kw in multi_keywords]
         pair_routes = await db.routes.find({'$and': kw_regexes}, PROJ).to_list(50)
         for pr in pair_routes:
-            if not any(r['rank_name'] == pr['rank_name'] and r['route'] == pr['route'] for r in routes):
+            if not any(r.get('rank_name') == pr.get('rank_name') and r.get('route') == pr.get('route') for r in routes):
                 routes.append(pr)
 
-    # 1. Exact / substring DB queries
-    ranks = await db.ranks.find({'$or': [{'rank_name': rx}, {'location': rx}]},
-                                {'_id': 0, 'qr_token': 0}).to_list(50)
+    # 1. Exact / substring DB queries for ranks, routes, and taxis
+    ranks_found = await db.ranks.find({'$or': [{'rank_name': rx}, {'location': rx}]},
+                                      {'_id': 0, 'qr_token': 0}).to_list(50)
+    for rf in ranks_found:
+        if not any(r.get('rank_name') == rf.get('rank_name') for r in ranks):
+            ranks.append(rf)
+
     routes_found = await db.routes.find({'$or': [{'route': rx}, {'rank_name': rx}]}, PROJ).to_list(50)
     for rf in routes_found:
-        if not any(r['rank_name'] == rf['rank_name'] and r['route'] == rf['route'] for r in routes):
+        if not any(r.get('rank_name') == rf.get('rank_name') and r.get('route') == rf.get('route') for r in routes):
             routes.append(rf)
 
     taxis = await db.taxis.find({'$or': [{'registration': rx}, {'route': rx}, {'rank_name': rx}]},
@@ -337,10 +345,10 @@ async def public_search(q: str = ""):
             kw_ranks = await db.ranks.find({'$or': [{'rank_name': kw_rx}, {'location': kw_rx}]},
                                            {'_id': 0, 'qr_token': 0}).to_list(20)
             for kr in kw_ranks:
-                if not any(r['rank_name'] == kr['rank_name'] for r in ranks):
+                if not any(r.get('rank_name') == kr.get('rank_name') for r in ranks):
                     ranks.append(kr)
 
-    # 2. Fuzzy / Typo tolerance (e.g. "Johanesburg" -> "Johannesburg", "Kimberley" -> "Kimberly")
+    # 2. Fuzzy / Typo tolerance for town/city names (e.g. "Johanesburg" -> "Johannesburg", "Kimberley" -> "Kimberly")
     all_ranks = await db.ranks.find({}, {'_id': 0, 'qr_token': 0}).to_list(200)
     existing_rank_names = {r['rank_name'] for r in ranks}
     q_lower = q.lower()
@@ -351,7 +359,6 @@ async def public_search(q: str = ""):
         loc_lower = (r.get('location') or '').lower()
         name_lower = r['rank_name'].lower()
         
-        # Check similarity of search word against rank name or location words
         sim_name = difflib.SequenceMatcher(None, q_lower, name_lower).ratio()
         sim_loc = difflib.SequenceMatcher(None, q_lower, loc_lower).ratio()
         
@@ -362,15 +369,16 @@ async def public_search(q: str = ""):
             ranks.append(r)
             existing_rank_names.add(r['rank_name'])
 
-    # 3. If ranks were found by location or name, pull the active routes & taxis operating at those ranks!
+    # 3. If ranks were found for the searched town or name, pull all operating routes & active taxis for full info!
     if ranks:
         rank_names = [r['rank_name'] for r in ranks]
         extra_routes = await db.routes.find({'rank_name': {'$in': rank_names}}, PROJ).to_list(100)
-        route_keys = {f"{r['rank_name']}--{r['route']}" for r in routes}
+        route_keys = {f"{r.get('rank_name')}--{r.get('route')}" for r in routes}
         for er in extra_routes:
-            if f"{er['rank_name']}--{er['route']}" not in route_keys:
+            key = f"{er.get('rank_name')}--{er.get('route')}"
+            if key not in route_keys:
                 routes.append(er)
-                route_keys.add(f"{er['rank_name']}--{er['route']}")
+                route_keys.add(key)
 
         extra_taxis = await db.taxis.find({'rank_name': {'$in': rank_names}},
                                           {'_id': 0, 'registration': 1, 'rank_name': 1, 'route': 1,
@@ -385,7 +393,6 @@ async def public_search(q: str = ""):
     for r in ranks:
         name = r.get('rank_name', '')
         loc = r.get('location', '')
-        # Direct Google Maps search / navigation link
         query_text = f"{name}, {loc}, South Africa" if loc else f"{name}, South Africa"
         r['google_maps_url'] = f"https://www.google.com/maps/search/?api=1&query={quote_plus(query_text)}"
         if r.get('geo_lat') and r.get('geo_lng'):
@@ -394,6 +401,11 @@ async def public_search(q: str = ""):
             r['google_directions_url'] = r['google_maps_url']
 
     return {'ranks': ranks, 'routes': routes, 'taxis': taxis, 'matched_query': q}
+
+
+@api.get("/passenger/search")
+async def passenger_search(q: str = ""):
+    return await public_search(q)
 
 
 @api.get("/public/taxi/{registration}")
@@ -1395,11 +1407,42 @@ async def taxi_update_live_location(registration: str, body: UpdateLocationIn):
     return {'ok': True, 'lat': lat, 'lng': lng, 'updated_at': now}
 
 
+@api.post("/public/taxi/{registration}/live-location")
+async def taxi_update_live_location(registration: str, body: UpdateLocationIn):
+    reg = registration.strip()
+    lat = body.lat if body.lat is not None else body.latitude
+    lng = body.lng if body.lng is not None else body.longitude
+    now = now_iso()
+    clean_key = re.sub(r'\s+', '', reg).upper()
+    await db.live_passenger_locations.update_one(
+        {'$or': [
+            {'reg_key': clean_key},
+            {'registration': {'$regex': f'^{re.escape(reg)}$', '$options': 'i'}},
+            {'registration': {'$regex': re.sub(r'\s+', r'\\s*', re.escape(reg)), '$options': 'i'}}
+        ]},
+        {'$set': {
+            'registration': reg,
+            'reg_key': clean_key,
+            'lat': lat,
+            'lng': lng,
+            'passenger_name': body.passenger_name or 'Passenger',
+            'updated_at': now
+        }},
+        upsert=True
+    )
+    return {'ok': True, 'lat': lat, 'lng': lng, 'updated_at': now}
+
+
 @api.get("/public/taxi/{registration}/live-location")
 async def taxi_get_live_location(registration: str):
     reg = registration.strip()
+    clean_key = re.sub(r'\s+', '', reg).upper()
     loc = await db.live_passenger_locations.find_one(
-        {'registration': {'$regex': f'^{reg}$', '$options': 'i'}},
+        {'$or': [
+            {'reg_key': clean_key},
+            {'registration': {'$regex': f'^{re.escape(reg)}$', '$options': 'i'}},
+            {'registration': {'$regex': re.sub(r'\s+', r'\\s*', re.escape(reg)), '$options': 'i'}}
+        ]},
         PROJ
     )
     if not loc or loc.get('lat') is None or loc.get('lng') is None:
@@ -1420,17 +1463,7 @@ async def taxi_get_live_location(registration: str):
     }
 
 
-# ---------------- AI Assistant ----------------
-AI_LANG_GREETINGS = {
-    "English": "Hello! I am your E-RANK Smart Assistant.",
-    "isiZulu": "Sawubona! Ngingumsizi wakho we-E-RANK.",
-    "isiXhosa": "Molo! Ndingumncedisi wakho we-E-RANK.",
-    "Sesotho": "Dumela! Ke nna mothusi wa gago wa E-RANK.",
-    "Setswana": "Dumela! Ke nna mothusi wa gago wa E-RANK.",
-    "Afrikaans": "Hallo! Ek is jou E-RANK Slim Assistent.",
-}
-
-
+# ---------------- AI Assistant (Unscripted & Real AI) ----------------
 @api.post("/public/ai/assistant")
 async def ai_assistant(body: AskAiIn):
     query = (body.message or "").strip()
@@ -1438,111 +1471,71 @@ async def ai_assistant(body: AskAiIn):
     user_name = (body.user_name or "").strip()
 
     if not query:
-        greeting = f"Hello {user_name}!" if user_name else AI_LANG_GREETINGS.get(lang, "Hello!")
+        greeting = f"Hello {user_name}!" if user_name else "Hello!"
         return {
-            'reply': f"{greeting} How can I assist you with ranks, routes, fares or safety today?",
+            'reply': f"{greeting} How can I help you with taxi ranks, routes, fares or safe travel today?",
             'language': lang
         }
 
-    q_lower = query.lower()
-
-    # Check for name introduction (e.g. "My name is Sipho" or "I am Sipho")
-    name_match = re.search(r"(?:my name is|i am|call me)\s+([a-zA-Z]+)", query, re.IGNORECASE)
-    if name_match:
-        detected_name = name_match.group(1).title()
-        if lang == "isiZulu":
-            return {'reply': f"Ngiyajabula ukukwazi {detected_name}! Ngingakusiza kanjani ngezikhundla zamatekisi, imizila, noma imali yokugibela namuhla?", 'language': lang}
-        elif lang == "isiXhosa":
-            return {'reply': f"Kuhle ukukwazi {detected_name}! Ndingakunceda njani ngeerenki zeeteksi, iindlela, okanye amamaxabiso namhlanje?", 'language': lang}
-        elif lang in ("Sesotho", "Setswana"):
-            return {'reply': f"Ke itumetse go go itse {detected_name}! Nka go thusa jang ka direnke tsa ditekesi, ditsela, le ditlhwatlhwa gompieno?", 'language': lang}
-        elif lang == "Afrikaans":
-            return {'reply': f"Aangename kennis {detected_name}! Hoe kan ek jou help met taxistaanplekke, roetes of tariewe vandag?", 'language': lang}
-        else:
-            return {'reply': f"Pleasure to meet you, {detected_name}! How can I help you with taxi ranks, routes, fares, or safe travel today?", 'language': lang}
-
-    # Greeting / Name introduction
-    if any(q_lower.startswith(w) or q_lower == w for w in ("hi", "hello", "hey", "sawubona", "molo", "dumela")):
-        if user_name:
-            if lang == "isiZulu":
-                return {'reply': f"Sawubona {user_name}! Ngingakusiza kanjani namuhla?", 'language': lang}
-            elif lang == "isiXhosa":
-                return {'reply': f"Molo {user_name}! Ndingakunceda njani namhlanje?", 'language': lang}
-            elif lang in ("Sesotho", "Setswana"):
-                return {'reply': f"Dumela {user_name}! Nka go thusa jang gompieno?", 'language': lang}
-            elif lang == "Afrikaans":
-                return {'reply': f"Hallo {user_name}! Hoe kan ek jou vandag help?", 'language': lang}
-            else:
-                return {'reply': f"Hello {user_name}! How can I help you with taxi routes, fares, ranks, or safe travel today?", 'language': lang}
-        else:
-            return {
-                'reply': f"{AI_LANG_GREETINGS.get(lang, 'Hello!')} May I ask your name and how I can help you with taxi routes, fares, ranks, or safe travel today?",
-                'language': lang
-            }
-
-    # Pull comprehensive platform data to formulate ground truth context
+    # Fetch live database records to ground the real AI in factual platform data
     ranks = await db.ranks.find({}, {'_id': 0, 'rank_name': 1, 'location': 1}).to_list(100)
     routes = await db.routes.find({}, {'_id': 0, 'rank_name': 1, 'route': 1, 'fare_label': 1}).to_list(200)
 
-    # Search for mentioned city or rank
-    matched_ranks = []
-    for r in ranks:
-        if r['rank_name'].lower() in q_lower or r['location'].lower() in q_lower:
-            matched_ranks.append(r)
+    ranks_summary = ", ".join([f"{r['rank_name']} in {r.get('location', '')}" for r in ranks])
+    routes_summary = "; ".join([f"{r['route']} ({r['rank_name']} -> {r.get('fare_label', '')})" for r in routes[:35]])
 
-    matched_routes = []
-    for rt in routes:
-        if any(w in rt['route'].lower() for w in q_lower.split() if len(w) > 3):
-            matched_routes.append(rt)
+    system_prompt = (
+        f"You are the intelligent, unscripted AI Assistant for E-RANK, a South African minibus taxi platform. "
+        f"User name: {user_name if user_name else 'User'}. "
+        f"Answer in: {lang}. "
+        f"Real in-app database data:\n"
+        f"Ranks on E-RANK: {ranks_summary}\n"
+        f"Routes and Fares: {routes_summary}\n\n"
+        f"User message: {query}\n\n"
+        f"Guidelines:\n"
+        f"- Answer naturally like a real AI. Do not repeat robotic scripts.\n"
+        f"- Answer to your best general knowledge about South Africa, taxi routes, travel, and fares.\n"
+        f"- If the city or rank is on E-RANK, quote the actual fare/location.\n"
+        f"- If the user asks about other cities or towns (like Durban, Cape Town, etc.), share your knowledge helpfully and mention that those ranks are not yet registered on E-RANK.\n"
+        f"- Do NOT tell the user 'please speak to a marshal' unless they specifically ask who is in charge on site.\n"
+        f"- Keep the answer concise (2-4 sentences), friendly, and practical in {lang}."
+    )
 
-    # If asking for town/city not yet on E-RANK:
-    town_indicators = ["cape town", "durban", "polokwane", "pretoria", "bloemfontein", "nelspruit", "rustenburg", "east london", "port elizabeth", "gqeberha"]
-    unknown_town_hit = next((t for t in town_indicators if t in q_lower and not any(t in r['location'].lower() for r in ranks)), None)
+    import urllib.request
+    from urllib.parse import quote_plus
+    try:
+        url = f"https://text.pollinations.ai/{quote_plus(system_prompt)}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            raw = resp.read().decode('utf-8', errors='ignore')
+            clean = raw.split('---')[0].strip()
+            if clean:
+                return {'reply': clean, 'language': lang}
+    except Exception as e:
+        logger.warning(f"Live AI completion notice: {e}")
 
-    if unknown_town_hit:
-        city_cap = unknown_town_hit.title()
-        if lang == "isiZulu":
-            reply = f"Amarenki ase-{city_cap} awakabhaliswa ku-E-RANK okwamanje. Sicela ubuze kumashali weranki edolobheni okulo njengamanje ukuze akunikeze imininingwane ephelele."
-        elif lang == "isiXhosa":
-            reply = f"Iirenki zase-{city_cap} azikabhaliswa kwi-E-RANK okwangoku. Nceda uthethe nomarshal kurenki ekwidolophu okuyo ngoku ukuze ufumane uncedo."
-        elif lang in ("Sesotho", "Setswana"):
-            reply = f"Direnke tsa {city_cap} ga di ise di tsene mo E-RANK. Tsweetswee botsa masomane/marshal ko renkeng ya toropo e o leng mo go yona gona jaanong."
-        elif lang == "Afrikaans":
-            reply = f"Die taxi-staanplekke in {city_cap} het nog nie by E-RANK aangesluit nie. Raadpleeg asseblief die marshal by die taxi-staanplek in jou huidige dorp/stad vir bystand."
-        else:
-            reply = f"The taxi ranks in {city_cap} have not joined E-RANK yet. Please liaise directly with the marshal at the taxi rank in the city or town you are currently in for guidance."
-        return {'reply': reply, 'language': lang}
+    # Natural fallback if external connection is slow
+    q_lower = query.lower()
+    matched_routes = [r for r in routes if any(w in r['route'].lower() for w in q_lower.split() if len(w) > 3)]
+    matched_ranks = [r for r in ranks if r['rank_name'].lower() in q_lower or r.get('location', '').lower() in q_lower]
 
-    # If matches were found in app data:
-    if matched_ranks or matched_routes:
-        info_lines = []
-        if matched_ranks:
-            info_lines.append("Here are the verified ranks found in E-RANK:")
-            for r in matched_ranks:
-                info_lines.append(f"• {r['rank_name']} (Located in {r['location']})")
-        if matched_routes:
-            info_lines.append("\nAvailable routes & fares:")
-            for rt in matched_routes[:5]:
-                info_lines.append(f"• {rt['route']} from {rt['rank_name']} — Fare: {rt['fare_label']}")
+    if matched_routes:
+        rt = matched_routes[0]
+        return {
+            'reply': f"For {rt['route']}, taxis depart from {rt['rank_name']} with an official fare of {rt.get('fare_label', 'N/A')}.",
+            'language': lang
+        }
+    elif matched_ranks:
+        rk = matched_ranks[0]
+        return {
+            'reply': f"{rk['rank_name']} is located in {rk.get('location', 'South Africa')}. You can find verified operating taxis and fares for this rank on E-RANK.",
+            'language': lang
+        }
 
-        reply = "\n".join(info_lines)
-        if lang != "English":
-            reply += f"\n\n(Information translated from E-RANK database for {lang} users)."
-        return {'reply': reply, 'language': lang}
-
-    # Fallback to marshal liaison as requested
-    if lang == "isiZulu":
-        reply = "Lolu lwazi alutholakali ohlelweni lwe-E-RANK okwamanje. Sicela ubuze kumashali kweranki lakho ukuze akusize ngqo."
-    elif lang == "isiXhosa":
-        reply = "Olu lwazi alukho kwisistimu ye-E-RANK okwangoku. Nceda uqhagamshelane nomarshal kwirenki yakho ukuze akuncede."
-    elif lang in ("Sesotho", "Setswana"):
-        reply = "Tshedimosetso e ga e fitlhelwe mo E-RANK gona jaanong. Tsweetswee buisana le marshal wa gago ko renkeng."
-    elif lang == "Afrikaans":
-        reply = "Hierdie inligting is tans nie in E-RANK beskikbaar nie. Skakel asseblief met die marshal by jou staanplek vir leiding."
-    else:
-        reply = "This specific information is not currently recorded in the E-RANK platform. Please liaise directly with the rank marshal on site for full route, vehicle, and operational assistance."
-
-    return {'reply': reply, 'language': lang}
+    return {
+        'reply': f"I understand you're asking about '{query}'. While our live system currently covers verified ranks across Johannesburg and Kimberley, I can help you with fares, routes, or safe ride tracking across the platform.",
+        'language': lang
+    }
 
 
 app.include_router(api)

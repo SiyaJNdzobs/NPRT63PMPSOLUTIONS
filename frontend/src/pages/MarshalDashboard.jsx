@@ -244,13 +244,31 @@ export default function MarshalDashboard() {
             <h1 className="text-2xl font-extrabold font-heading">{rank?.rank_name || "Rank"} control</h1>
             <p className="text-slate-400 text-sm mt-1 flex items-center gap-1"><MapPin size={14} /> {rank?.location}</p>
           </div>
-          <Card className="bg-[#181F2C] border-[#263144] px-4 py-2 flex items-center gap-3" data-testid="geo-toggle-card">
-            <div>
-              <div className="text-sm font-medium">Geo-check (20m)</div>
-              <div className="text-[11px] text-slate-400">Require drivers near the rank</div>
-            </div>
-            <Switch checked={!!rank?.geo_check_enabled} onCheckedChange={toggleGeo} data-testid="geo-toggle" />
-          </Card>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                qc.invalidateQueries({ queryKey: ["m-rank"] });
+                qc.invalidateQueries({ queryKey: ["m-queue"] });
+                qc.invalidateQueries({ queryKey: ["m-routes"] });
+                qc.invalidateQueries({ queryKey: ["m-updates"] });
+                toast.success("Marshal rank & queue data refreshed");
+              }}
+              data-testid="marshal-refresh-btn"
+              className="border-[#263144] hover:bg-[#181F2C] text-slate-300 gap-1.5 shrink-0 h-10 px-3"
+              title="Refresh latest queue and rank status"
+            >
+              <RefreshCw size={14} /> Refresh
+            </Button>
+            <Card className="bg-[#181F2C] border-[#263144] px-4 py-2 flex items-center gap-3" data-testid="geo-toggle-card">
+              <div>
+                <div className="text-sm font-medium">Geo-check (20m)</div>
+                <div className="text-[11px] text-slate-400">Require drivers near the rank</div>
+              </div>
+              <Switch checked={!!rank?.geo_check_enabled} onCheckedChange={toggleGeo} data-testid="geo-toggle" />
+            </Card>
+          </div>
         </div>
 
         <Tabs defaultValue="queue">

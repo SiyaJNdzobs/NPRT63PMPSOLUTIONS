@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   ShieldCheck, Search, Copy, Bus, MapPin, Route as RouteIcon, Megaphone,
-  User, Phone, MessageCircle, Share2, ExternalLink, Navigation, LocateFixed, Radio, Check, X,
+  User, Phone, MessageCircle, Share2, ExternalLink, Navigation, LocateFixed, Radio, Check, X, RefreshCw,
 } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,11 @@ export default function PassengerDashboard() {
     return localStorage.getItem("erank_location_consent") || "unset";
   });
   const [consentModalOpen, setConsentModalOpen] = useState(false);
-  const [currentCoords, setCurrentCoords] = useState(null);
+  const [currentCoords, setCurrentCoords] = useState(() => {
+    const lat = localStorage.getItem("erank_live_lat");
+    const lng = localStorage.getItem("erank_live_lng");
+    return lat && lng ? { lat: parseFloat(lat), lng: parseFloat(lng) } : null;
+  });
   const [trackingActive, setTrackingActive] = useState(false);
 
   const startLocationTracking = () => {
@@ -37,7 +41,10 @@ export default function PassengerDashboard() {
     setTrackingActive(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setCurrentCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setCurrentCoords(coords);
+        localStorage.setItem("erank_live_lat", String(coords.lat));
+        localStorage.setItem("erank_live_lng", String(coords.lng));
       },
       (err) => console.warn("Geo error:", err),
       { enableHighAccuracy: true, timeout: 10000 }
@@ -45,7 +52,10 @@ export default function PassengerDashboard() {
 
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        setCurrentCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setCurrentCoords(coords);
+        localStorage.setItem("erank_live_lat", String(coords.lat));
+        localStorage.setItem("erank_live_lng", String(coords.lng));
       },
       (err) => console.warn("Geo watch error:", err),
       { enableHighAccuracy: true, maximumAge: 10000 }
@@ -157,24 +167,59 @@ export default function PassengerDashboard() {
   };
 
   const getShareUrl = () => {
+    let base = "";
     if (taxi?.share_url && (taxi.share_url.startsWith("http://") || taxi.share_url.startsWith("https://"))) {
-      return taxi.share_url;
+      base = taxi.share_url;
+    } else {
+      const origin = typeof window !== "undefined" && window.location.origin && window.location.origin !== "null"
+        ? window.location.origin
+        : "https://erank.onrender.com";
+      base = `${origin}/t/${encodeURIComponent(taxi?.registration || "")}`;
     }
-    const origin = typeof window !== "undefined" && window.location.origin && window.location.origin !== "null"
-      ? window.location.origin
-      : "https://erank.onrender.com";
-    return `${origin}/t/${encodeURIComponent(taxi?.registration || "")}`;
+
+    // If passenger granted location consent and we have coordinates, append query params
+    const lat = currentCoords?.lat || (typeof window !== "undefined" ? localStorage.getItem("erank_live_lat") : null);
+    const lng = currentCoords?.lng || (typeof window !== "undefined" ? localStorage.getItem("erank_live_lng") : null);
+    if (locationConsent === "granted" && lat && lng) {
+      const sep = base.includes("?") ? "&" : "?";
+      return `${base}${sep}lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`;
+    }
+    return base;
   };
 
-  const copyShare = () => {
+  const copyShare = async () => {
+    // Attempt instant push to backend if coords available
+    if (taxi?.registration && currentCoords && locationConsent === "granted") {
+      try {
+        await api.post(`/public/taxi/${encodeURIComponent(taxi.registration)}/live-location`, {
+          latitude: currentCoords.lat,
+          longitude: currentCoords.lng,
+          passenger_name: "Passenger",
+        });
+      } catch (e) {
+        console.warn("Silent sync before copy:", e);
+      }
+    }
     const url = getShareUrl();
     navigator.clipboard.writeText(url);
     toast.success("Share link copied to clipboard");
   };
 
-  const shareWhatsApp = () => {
+  const shareWhatsApp = async () => {
+    // Attempt instant push to backend if coords available
+    if (taxi?.registration && currentCoords && locationConsent === "granted") {
+      try {
+        await api.post(`/public/taxi/${encodeURIComponent(taxi.registration)}/live-location`, {
+          latitude: currentCoords.lat,
+          longitude: currentCoords.lng,
+          passenger_name: "Passenger",
+        });
+      } catch (e) {
+        console.warn("Silent sync before WhatsApp share:", e);
+      }
+    }
     const url = getShareUrl();
-    const msg = `🚨 Safe Ride Details (E-RANK):\n\nI am travelling in taxi *${taxi.registration}*.\n• Rank: ${taxi.rank_name}\n• Route: ${taxi.route}\n• Driver: ${taxi.driver_name || "N/A"}\n• Driver Contact: ${taxi.driver_contact || "N/A"}\n\nTrack or view verified ride info here:\n${url}`;
+    const msg = `🚨 Safe Ride Details (E-RANK):\n\nI am travelling in taxi *${taxi.registration}*.\n• Rank: ${taxi.rank_name}\n• Route: ${taxi.route}\n• Driver: ${taxi.driver_name || "N/A"}\n• Driver Contact: ${taxi.driver_contact || "N/A"}\n\nTrack or view verified ride info & live location here:\n${url}`;
     const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
     window.open(waUrl, "_blank", "noopener,noreferrer");
   };
@@ -183,11 +228,23 @@ export default function PassengerDashboard() {
     <div className="min-h-screen bg-[#0A0D14] text-white">
       <AppHeader onRefresh={loadUpdates} />
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-        <div>
-          <h1 className="text-2xl font-extrabold font-heading">Safe taxi & rank lookup</h1>
-          <p className="text-slate-400 text-sm mt-1">
-            Search by taxi registration, rank name, or city/location (e.g. <span className="text-primary font-mono font-medium">Johannesburg</span>, <span className="text-primary font-mono font-medium">MTN Rank</span>, or <span className="text-primary font-mono font-medium">MT 004 GP</span>).
-          </p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-extrabold font-heading">Safe taxi & rank lookup</h1>
+            <p className="text-slate-400 text-sm mt-1">
+              Search by taxi registration, rank name, or city/location (e.g. <span className="text-primary font-mono font-medium">Johannesburg</span>, <span className="text-primary font-mono font-medium">MTN Rank</span>, or <span className="text-primary font-mono font-medium">MT 004 GP</span>).
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={loadUpdates}
+            data-testid="passenger-refresh-btn"
+            className="border-[#263144] hover:bg-[#181F2C] text-slate-300 gap-1.5 shrink-0"
+            title="Refresh latest queue and updates"
+          >
+            <RefreshCw size={14} /> Refresh
+          </Button>
         </div>
 
         {/* Bolt-style Live Location Sharing Status Bar */}

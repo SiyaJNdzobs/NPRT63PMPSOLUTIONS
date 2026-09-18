@@ -73,10 +73,10 @@ export function AppHeader({ subtitle, onRefresh }) {
                 disabled={isRefreshing}
                 data-testid="dashboard-refresh-btn"
                 title="Refresh dashboard data"
-                className="border-[#334155] text-slate-200 hover:bg-[#20293A] gap-1.5 h-9 px-3"
+                className="border-[#334155] text-slate-200 hover:bg-[#20293A] gap-1.5 h-9 px-2.5 sm:px-3"
               >
                 <RefreshCw size={14} className={isRefreshing ? "animate-spin text-primary" : "text-slate-300"} />
-                <span className="hidden md:inline text-xs font-medium">Refresh</span>
+                <span className="text-xs font-medium">Refresh</span>
               </Button>
               {user.role !== "admin" || true ? (
                 <Button

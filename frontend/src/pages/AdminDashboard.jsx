@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, ShieldCheck, AlertTriangle, RefreshCw } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -53,7 +53,19 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-[#0A0D14] text-white">
       <AppHeader />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        <h1 className="text-2xl font-extrabold font-heading">Admin control center</h1>
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-2xl font-extrabold font-heading">Admin control center</h1>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => qc.invalidateQueries()}
+            data-testid="admin-refresh-btn"
+            className="border-[#263144] hover:bg-[#181F2C] text-slate-300 gap-1.5 shrink-0"
+            title="Refresh latest admin data"
+          >
+            <RefreshCw size={14} /> Refresh
+          </Button>
+        </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
           {[["Owners", ov.owners], ["Marshals", ov.marshals], ["Drivers", ov.drivers], ["Taxis", ov.taxis], ["Ranks", ov.ranks], ["Routes", ov.routes], ["In queue", ov.active_queue], ["Trips", ov.operations]].map(([l, v]) => (
