@@ -50,11 +50,17 @@ export function AiAssistant() {
     }
   }, [messages, isOpen]);
 
-  useEffect(() => {
-    const greeting = user?.full_name
-      ? `Hello ${user.full_name}! 👋 I am your E-RANK Smart Assistant. How can I assist you with ranks, routes, fares, or safe taxi operations today?`
-      : "Hello! 👋 I am your E-RANK Smart Assistant. Ask me about ranks, routes, fares, or say 'Hi' to introduce yourself!";
+  const GREETINGS = {
+    English: (name) => name ? `Hello ${name}! 👋 I am your E-RANK Smart Assistant. How can I assist you with ranks, routes, fares, or safe taxi operations today?` : "Hello! 👋 I am your E-RANK Smart Assistant. Ask me about ranks, routes, fares, or say 'Hi' to introduce yourself!",
+    isiZulu: (name) => name ? `Sawubona ${name}! 👋 Ngingumsizi we-E-RANK. Ngingakusiza ngani namhlanje — amarank, izindlela, noma imali yokugibela?` : "Sawubona! 👋 Ngingumsizi we-E-RANK. Buza ngamarank, izindlela, imali yokugibela noma usho 'Sawubona' ukuzikhethela!",
+    isiXhosa: (name) => name ? `Molo ${name}! 👋 NdinguMncedisi we-E-RANK. Ndingakunceda njani namhlanje — amarank, iindlela, okanye imali yokuhamba?` : "Molo! 👋 NdinguMncedisi we-E-RANK. Buza ngamarank, iindlela, imali yokuhamba okanye usithi 'Molo'!",
+    Sesotho: (name) => name ? `Lumela ${name}! 👋 Ke motlatsi wa E-RANK. Nka o thusa jwang kajeno — marank, ditsela, kapa ditjhelete tsa ho palama?` : "Lumela! 👋 Ke motlatsi wa E-RANK. Botsa ka marank, ditsela, ditjhelete tsa ho palama kapa re bua ka ho ikenela!",
+    Setswana: (name) => name ? `Dumela ${name}! 👋 Ke modiretsi wa E-RANK. Nka go thusa jang gompieno — marank, ditsela, kgotsa madi a go palama?` : "Dumela! 👋 Ke modiretsi wa E-RANK. Botsa ka marank, ditsela, madi a go palama kgotsa re bua ka go itsayisa!",
+    Afrikaans: (name) => name ? `Hallo ${name}! 👋 Ek is jou E-RANK Slim Assistent. Hoe kan ek jou help met ranke, roetes, tariewe of veilige taxireise vandag?` : "Hallo! 👋 Ek is jou E-RANK Slim Assistent. Vra my oor ranke, roetes, tariewe of sê 'Hallo' om jouself voor te stel!",
+  };
 
+  useEffect(() => {
+    const greeting = (GREETINGS[language] || GREETINGS.English)(user?.full_name || "");
     setMessages([
       {
         id: "welcome",
@@ -63,7 +69,23 @@ export function AiAssistant() {
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       },
     ]);
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
   }, [user?.full_name]);
+
+  // Reset chat with new language greeting when language changes
+  useEffect(() => {
+    if (!isOpen) return; // only reset if chat is open — don't reset on mount
+    const greeting = (GREETINGS[language] || GREETINGS.English)(user?.full_name || "");
+    setMessages([
+      {
+        id: `lang-switch-${language}`,
+        sender: "bot",
+        text: greeting,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      },
+    ]);
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+  }, [language]);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -195,9 +217,7 @@ export function AiAssistant() {
       {
         id: "cleared-welcome",
         sender: "bot",
-        text: user?.full_name
-          ? `Chat reset. How can I help you today, ${user.full_name}?`
-          : "Chat reset. Ask me anything about ranks, routes, fares, or say 'Hi'!",
+        text: (GREETINGS[language] || GREETINGS.English)(user?.full_name || ""),
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       },
     ]);

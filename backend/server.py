@@ -207,6 +207,15 @@ class AskAiIn(BaseModel):
     user_name: Optional[str] = None
 
 
+class PassengerBoardIn(BaseModel):
+    registration: str
+    passenger_name: str           # → name in manifest
+    contact: Optional[str] = ""   # → contact
+    destination: Optional[str] = ""  # → destination
+    kin_name: str
+    kin_contact: str
+
+
 # ---------------- auth ----------------
 @api.post("/auth/login")
 async def login(body: LoginIn):
@@ -1000,7 +1009,8 @@ async def marshal_queue_depart(body: MarshalDepartIn, user=Depends(marshal_dep))
     if entry.get('long_distance') and not long_pax:
         raise HTTPException(status_code=400,
                             detail="Capture long-distance passenger details before departing.")
-    revenue = entry['fare_amount'] * entry['seats']
+    # Long-distance: revenue = boarded passenger count x fare; local: seats x fare
+    revenue = entry['fare_amount'] * (len(long_pax) if entry.get('long_distance') and long_pax else entry['seats'])
     op = {'id': str(uuid.uuid4()), 'taxi_registration': entry['taxi_registration'],
           'rank_name': entry['rank_name'], 'owner_name': entry['owner_name'],
           'driver_name': entry['driver_name'], 'route': entry['route'],
@@ -1264,7 +1274,8 @@ async def driver_depart(body: DepartIn, user=Depends(driver_dep)):
     if entry.get('long_distance') and not long_pax:
         raise HTTPException(status_code=400,
                             detail="Capture long-distance passenger details before departing.")
-    revenue = entry['fare_amount'] * entry['seats']
+    # Long-distance: revenue = boarded passenger count x fare; local: seats x fare
+    revenue = entry['fare_amount'] * (len(long_pax) if entry.get('long_distance') and long_pax else entry['seats'])
     op = {'id': str(uuid.uuid4()), 'taxi_registration': entry['taxi_registration'],
           'rank_name': entry['rank_name'], 'owner_name': entry['owner_name'],
           'driver_name': entry['driver_name'], 'route': entry['route'],
@@ -1497,6 +1508,67 @@ async def taxi_get_live_location(registration: str):
     }
 
 
+# ---------------- Passenger Boarding (long-distance self-register) ----------------
+@api.post("/passenger/board")
+async def passenger_board(body: PassengerBoardIn):
+    """Allow a passenger to add themselves to a long-distance taxi manifest (no login required)."""
+    reg = body.registration.strip()
+    passenger_name = body.passenger_name.strip()
+    kin_name = body.kin_name.strip()
+    kin_contact = body.kin_contact.strip()
+
+    if not passenger_name:
+        raise HTTPException(status_code=400, detail="Full name is required.")
+    if not kin_name or not kin_contact:
+        raise HTTPException(status_code=400, detail="Next of kin name and contact are required.")
+
+    # Find the taxi and verify it is long-distance and in a queue
+    taxi = await db.taxis.find_one({'registration': {'$regex': f'^{reg}$', '$options': 'i'}}, PROJ)
+    if not taxi:
+        raise HTTPException(status_code=404, detail="Taxi not found. Check the registration number.")
+    if not is_long_distance(taxi.get('route', '')):
+        raise HTTPException(status_code=400, detail="This taxi is local. Boarding manifest is for long-distance taxis only.")
+
+    # Find the active queue entry for this taxi
+    entry = await db.queue.find_one({'taxi_registration': {'$regex': f'^{reg}$', '$options': 'i'},
+                                     'status': {'$in': ['waiting', 'boarding']}})
+    if not entry:
+        raise HTTPException(status_code=400, detail="This taxi is not currently in a queue. Please wait for it to join a rank queue before boarding.")
+
+    new_passenger = {
+        'name': passenger_name,
+        'contact': (body.contact or '').strip(),
+        'destination': (body.destination or taxi.get('route', '')).strip(),
+        'kin_name': kin_name,
+        'kin_contact': kin_contact,
+        'boarded_at': now_iso(),
+    }
+
+    # Append to queue entry passengers list
+    await db.queue.update_one(
+        {'id': entry['id']},
+        {'$push': {'long_distance_passengers': new_passenger}}
+    )
+    # Also update the long_distance_requests document
+    await db.long_distance_requests.update_many(
+        {'taxi_registration': {'$regex': f'^{reg}$', '$options': 'i'}, 'status': 'pending'},
+        {'$push': {'passengers': new_passenger}, '$set': {'updated_at': now_iso()}}
+    )
+
+    # Count total passengers now on this entry
+    updated = await db.queue.find_one({'id': entry['id']}, PROJ)
+    pax_count = len(updated.get('long_distance_passengers', []))
+
+    return {
+        'ok': True,
+        'passenger_name': passenger_name,
+        'taxi_registration': taxi['registration'],
+        'route': taxi.get('route', ''),
+        'rank_name': entry['rank_name'],
+        'passenger_count': pax_count,
+    }
+
+
 # ---------------- AI Assistant (Unscripted & Real AI) ----------------
 @api.post("/public/ai/assistant")
 async def ai_assistant(body: AskAiIn):
@@ -1519,9 +1591,13 @@ async def ai_assistant(body: AskAiIn):
     routes_summary = "; ".join([f"{r['route']} ({r['rank_name']} -> {r.get('fare_label', '')})" for r in routes[:35]])
 
     system_prompt = (
-        f"You are the intelligent, unscripted AI Assistant for E-RANK, a South African minibus taxi platform. "
+        f"CRITICAL INSTRUCTION: You MUST write your ENTIRE response in {lang} only. "
+        f"Do NOT use English at all unless the selected language IS English. "
+        f"If {lang} is isiZulu respond fully in isiZulu. If {lang} is Afrikaans respond in Afrikaans. "
+        f"If {lang} is isiXhosa respond in isiXhosa. If {lang} is Sesotho respond in Sesotho. "
+        f"If {lang} is Setswana respond in Setswana. Never mix languages in your reply. "
+        f"You are the intelligent AI Assistant for E-RANK, a South African minibus taxi platform. "
         f"User name: {user_name if user_name else 'User'}. "
-        f"Answer in: {lang}. "
         f"Real in-app database data:\n"
         f"Ranks on E-RANK: {ranks_summary}\n"
         f"Routes and Fares: {routes_summary}\n\n"
@@ -1530,9 +1606,10 @@ async def ai_assistant(body: AskAiIn):
         f"- Answer naturally like a real AI. Do not repeat robotic scripts.\n"
         f"- Answer to your best general knowledge about South Africa, taxi routes, travel, and fares.\n"
         f"- If the city or rank is on E-RANK, quote the actual fare/location.\n"
-        f"- If the user asks about other cities or towns (like Durban, Cape Town, etc.), share your knowledge helpfully and mention that those ranks are not yet registered on E-RANK.\n"
+        f"- If the user asks about other cities or towns (like Durban, Cape Town, etc.), share your knowledge helpfully and mention those ranks are not yet registered on E-RANK.\n"
         f"- Do NOT tell the user 'please speak to a marshal' unless they specifically ask who is in charge on site.\n"
-        f"- Keep the answer concise (2-4 sentences), friendly, and practical in {lang}."
+        f"- Keep the answer concise (2-4 sentences), friendly, and practical.\n"
+        f"- REMEMBER: Your ENTIRE response must be in {lang}."
     )
 
     import urllib.request

@@ -2,17 +2,25 @@ import React, { useEffect, useState } from "react";
 import {
   ShieldCheck, Search, Copy, Bus, MapPin, Route as RouteIcon, Megaphone,
   User, Phone, MessageCircle, Share2, ExternalLink, Navigation, LocateFixed, Radio, Check, X, RefreshCw,
+  ClipboardList, UserCheck,
 } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { api, apiError } from "@/lib/api";
 import { toast } from "sonner";
+
+// Helper: detect long-distance taxi by route string (contains ↔ or → or marked long_distance)
+const isLongDistance = (t) => t?.long_distance === true || /[↔→]/.test(t?.route || "");
+
+// Helper: localStorage key for boarded taxi
+const boardedKey = (reg) => `erank_boarded_${reg}`;
 
 export default function PassengerDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -20,6 +28,13 @@ export default function PassengerDashboard() {
   const [searchResults, setSearchResults] = useState(null);
   const [busy, setBusy] = useState(false);
   const [updates, setUpdates] = useState([]);
+
+  // Boarding manifest state (long-distance only)
+  const [boardingOpen, setBoardingOpen] = useState(false);
+  const [boardForm, setBoardForm] = useState({ passenger_name: "", contact: "", destination: "", kin_name: "", kin_contact: "" });
+  const [boardErrors, setBoardErrors] = useState({});
+  const [boarded, setBoarded] = useState(false);
+  const [boardedPassengerName, setBoardedPassengerName] = useState("");
 
   // Bolt-style Passenger Live Location Sharing states
   const [locationConsent, setLocationConsent] = useState(() => {
@@ -132,6 +147,9 @@ export default function PassengerDashboard() {
       const { data } = await api.get(`/passenger/lookup?registration=${encodeURIComponent(query)}`);
       if (data && data.registration) {
         setTaxi(data);
+        const saved = localStorage.getItem(boardedKey(data.registration));
+        setBoarded(!!saved);
+        setBoardedPassengerName(saved || "");
         setBusy(false);
         return;
       }
@@ -158,7 +176,42 @@ export default function PassengerDashboard() {
     try {
       const { data } = await api.get(`/passenger/lookup?registration=${encodeURIComponent(regNum)}`);
       setTaxi(data);
+      // Restore boarding state if this taxi was already boarded in this session
+      const saved = localStorage.getItem(boardedKey(data.registration));
+      if (saved) {
+        setBoarded(true);
+        setBoardedPassengerName(saved);
+      } else {
+        setBoarded(false);
+        setBoardedPassengerName("");
+      }
       window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      toast.error(apiError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const boardTaxi = async () => {
+    const errs = {};
+    if (!boardForm.passenger_name.trim()) errs.passenger_name = "Full name is required.";
+    if (!boardForm.kin_name.trim()) errs.kin_name = "Next of kin name is required.";
+    if (!boardForm.kin_contact.trim()) errs.kin_contact = "Next of kin contact is required.";
+    if (Object.keys(errs).length > 0) { setBoardErrors(errs); return; }
+    setBoardErrors({});
+    setBusy(true);
+    try {
+      await api.post("/passenger/board", {
+        registration: taxi.registration,
+        ...boardForm,
+      });
+      localStorage.setItem(boardedKey(taxi.registration), boardForm.passenger_name.trim());
+      setBoarded(true);
+      setBoardedPassengerName(boardForm.passenger_name.trim());
+      setBoardingOpen(false);
+      setBoardForm({ passenger_name: "", contact: "", destination: "", kin_name: "", kin_contact: "" });
+      toast.success("You are boarded! You can now share your ride details.");
     } catch (err) {
       toast.error(apiError(err));
     } finally {
@@ -411,8 +464,15 @@ export default function PassengerDashboard() {
         {taxi && (
           <Card className="bg-[#181F2C] border-[#263144] p-6" data-testid="lookup-result">
             <div className="flex items-center justify-between mb-4">
-              <div className="h-11 w-11 rounded-lg bg-primary flex items-center justify-center">
-                <Bus className="text-black" size={22} />
+              <div className="flex items-center gap-3">
+                <div className="h-11 w-11 rounded-lg bg-primary flex items-center justify-center">
+                  <Bus className="text-black" size={22} />
+                </div>
+                {isLongDistance(taxi) && (
+                  <Badge className="bg-primary/15 text-primary border-primary/30 gap-1 text-[10px]">
+                    Long Distance
+                  </Badge>
+                )}
               </div>
               <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 gap-1">
                 <ShieldCheck size={14} /> Verified
@@ -455,6 +515,37 @@ export default function PassengerDashboard() {
               </div>
             </div>
 
+            {/* Long-distance Board button / boarded badge */}
+            {isLongDistance(taxi) && (
+              <div className="mt-5">
+                {boarded ? (
+                  <div className="flex items-center gap-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-4 py-3" data-testid="boarded-badge">
+                    <UserCheck className="text-emerald-400 shrink-0" size={20} />
+                    <div>
+                      <div className="text-emerald-300 font-semibold text-sm">Boarded ✓</div>
+                      <div className="text-xs text-slate-400">Travelling as: <span className="text-white font-medium">{boardedPassengerName}</span></div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-2">
+                    <div className="flex items-center gap-2 text-primary font-semibold text-sm">
+                      <ClipboardList size={16} /> Long-distance travel form
+                    </div>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      This is a long-distance taxi. Fill in your travel details to join the manifest — this is required before you can share your ride.
+                    </p>
+                    <Button
+                      onClick={() => setBoardingOpen(true)}
+                      data-testid="board-taxi-btn"
+                      className="w-full bg-primary text-black hover:bg-primary/90 gap-2 h-11 font-bold"
+                    >
+                      <ClipboardList size={16} /> Board taxi &amp; fill travel form
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {locationConsent === "granted" && currentCoords && (
               <div className="mt-4 p-3 rounded-lg bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -475,26 +566,39 @@ export default function PassengerDashboard() {
               </div>
             )}
 
-            <p className="text-[11px] text-slate-500 mt-4">Share this with your next of kin so they know which taxi and driver you are travelling with.</p>
-            <div className="mt-6 flex flex-col sm:flex-row gap-2">
-              <Button
-                onClick={shareWhatsApp}
-                data-testid="share-whatsapp-btn"
-                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold gap-2 h-11"
-              >
-                <MessageCircle size={18} /> Share on WhatsApp
-              </Button>
-              <Button
-                onClick={copyShare}
-                data-testid="copy-share-btn"
-                variant="outline"
-                className="flex-1 border-[#334155] text-slate-200 hover:bg-[#20293A] gap-2 h-11"
-              >
-                <Copy size={16} /> Copy link
-              </Button>
-            </div>
+            {/* Share buttons — locked for long-distance until boarded */}
+            {isLongDistance(taxi) && !boarded ? (
+              <div className="mt-6 p-3 rounded-xl border border-[#263144] bg-[#0A0D14] text-center">
+                <p className="text-xs text-slate-400">
+                  <ClipboardList size={12} className="inline mr-1 text-primary" />
+                  Complete the travel form above to unlock ride sharing.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-[11px] text-slate-500 mt-4">Share this with your next of kin so they know which taxi and driver you are travelling with.</p>
+                <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                  <Button
+                    onClick={shareWhatsApp}
+                    data-testid="share-whatsapp-btn"
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold gap-2 h-11"
+                  >
+                    <MessageCircle size={18} /> Share on WhatsApp
+                  </Button>
+                  <Button
+                    onClick={copyShare}
+                    data-testid="copy-share-btn"
+                    variant="outline"
+                    className="flex-1 border-[#334155] text-slate-200 hover:bg-[#20293A] gap-2 h-11"
+                  >
+                    <Copy size={16} /> Copy link
+                  </Button>
+                </div>
+              </>
+            )}
           </Card>
         )}
+
 
         {updates.length > 0 && (
           <div className="space-y-3">
@@ -564,6 +668,107 @@ export default function PassengerDashboard() {
               data-testid="accept-location-btn"
             >
               <Check size={15} className="mr-1" /> Accept & Share Location
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Passenger Boarding Dialog — matches marshal manifest fields exactly */}
+      <Dialog open={boardingOpen} onOpenChange={(v) => { if (!v) setBoardingOpen(false); }}>
+        <DialogContent className="bg-[#181F2C] border-[#263144] text-white max-w-md" data-testid="boarding-dialog">
+          <DialogHeader>
+            <div className="h-12 w-12 rounded-full bg-primary/20 text-primary flex items-center justify-center mb-2 mx-auto">
+              <ClipboardList size={26} />
+            </div>
+            <DialogTitle className="text-center text-xl font-bold font-heading text-white">
+              Long-Distance Travel Form
+            </DialogTitle>
+            <DialogDescription className="text-center text-slate-300 text-sm mt-1">
+              Your details will be added to the official passenger manifest for <span className="text-primary font-mono font-bold">{taxi?.registration}</span>. Same form used by the rank marshal.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-1">
+            {/* Passenger Name */}
+            <div>
+              <Label className="text-slate-300 text-xs">Passenger Full Name *</Label>
+              <Input
+                value={boardForm.passenger_name}
+                onChange={(e) => { setBoardForm({ ...boardForm, passenger_name: e.target.value }); setBoardErrors({ ...boardErrors, passenger_name: null }); }}
+                placeholder="Your full name"
+                data-testid="board-pax-name"
+                className="mt-1 h-10 bg-[#0A0D14] border-[#263144] text-white"
+              />
+              {boardErrors.passenger_name && <p className="text-red-400 text-xs mt-1">{boardErrors.passenger_name}</p>}
+            </div>
+
+            {/* Contact */}
+            <div>
+              <Label className="text-slate-300 text-xs">Your Cell Number (optional)</Label>
+              <Input
+                value={boardForm.contact}
+                onChange={(e) => setBoardForm({ ...boardForm, contact: e.target.value })}
+                placeholder="+27 81 234 5678"
+                data-testid="board-pax-contact"
+                className="mt-1 h-10 bg-[#0A0D14] border-[#263144] text-white"
+              />
+            </div>
+
+            {/* Destination */}
+            <div>
+              <Label className="text-slate-300 text-xs">Destination (optional — defaults to full route)</Label>
+              <Input
+                value={boardForm.destination}
+                onChange={(e) => setBoardForm({ ...boardForm, destination: e.target.value })}
+                placeholder={taxi?.route || "e.g. Indian Center Kimberley"}
+                data-testid="board-pax-destination"
+                className="mt-1 h-10 bg-[#0A0D14] border-[#263144] text-white"
+              />
+            </div>
+
+            {/* Next of kin name */}
+            <div>
+              <Label className="text-slate-300 text-xs">Next of Kin Full Name *</Label>
+              <Input
+                value={boardForm.kin_name}
+                onChange={(e) => { setBoardForm({ ...boardForm, kin_name: e.target.value }); setBoardErrors({ ...boardErrors, kin_name: null }); }}
+                placeholder="e.g. Nomsa Dlamini"
+                data-testid="board-kin-name"
+                className="mt-1 h-10 bg-[#0A0D14] border-[#263144] text-white"
+              />
+              {boardErrors.kin_name && <p className="text-red-400 text-xs mt-1">{boardErrors.kin_name}</p>}
+            </div>
+
+            {/* Next of kin contact */}
+            <div>
+              <Label className="text-slate-300 text-xs">Next of Kin Contact Number *</Label>
+              <Input
+                value={boardForm.kin_contact}
+                onChange={(e) => { setBoardForm({ ...boardForm, kin_contact: e.target.value }); setBoardErrors({ ...boardErrors, kin_contact: null }); }}
+                placeholder="+27 72 123 4567"
+                data-testid="board-kin-contact"
+                className="mt-1 h-10 bg-[#0A0D14] border-[#263144] text-white"
+              />
+              {boardErrors.kin_contact && <p className="text-red-400 text-xs mt-1">{boardErrors.kin_contact}</p>}
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-[#263144]">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setBoardingOpen(false)}
+              className="flex-1 border-[#334155] text-slate-300 hover:bg-slate-800"
+            >
+              <X size={15} className="mr-1" /> Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={boardTaxi}
+              disabled={busy}
+              className="flex-1 bg-primary text-black hover:bg-primary/90 font-bold gap-2"
+              data-testid="confirm-board-btn"
+            >
+              <ClipboardList size={15} /> {busy ? "Submitting…" : "Confirm Boarding"}
             </Button>
           </DialogFooter>
         </DialogContent>
