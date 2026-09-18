@@ -30,7 +30,7 @@
 | **UI & Styling** | Tailwind CSS + shadcn/ui | High-contrast dark-mode theme designed for maximum visibility in diverse field lighting conditions. |
 | **Icons & QR** | Lucide React + HTML5 QR Code | Lightweight vector icons and browser-native camera QR scanning without requiring external app downloads. |
 | **Backend API** | FastAPI (Python 3.11+) | High-throughput asynchronous endpoints (`async`/`await`) with automatic OpenAPI schema validation. |
-| **Database** | MongoDB Atlas (via Motor) | Flexible document store capable of handling nested passenger manifests, live queues, and operational logs. |
+| **Database** | MongoDB Atlas (via Motor) | Flexible document store capable of handling nested passenger manifests, live queues, and operational logs and mostly one in few databases that allow authentication of pin and cellphone and broadcasting live updates and operations without a lot of complications. |
 | **Export Engine** | openpyxl | Server-side generation of structured `.xlsx` spreadsheets for owner revenue auditing. |
 
 ---
@@ -40,7 +40,7 @@
 * **Cryptographic Hashing:** Passwords and user PINs are hashed using industry-standard `bcrypt` with unique salts before persisting to storage.
 * **Stateless Token Authentication:** Authenticated requests use signed JSON Web Tokens (`PyJWT`) with role claims and expiration validation.
 * **Role-Based Access Control (RBAC):** Every backend endpoint is protected by strict dependency guards (`require_role`) ensuring users can only access their authorized resources.
-* **Mandatory First-Login Credential Reset:** Users with temporary system-generated credentials must establish a custom password/PIN upon initial login before dashboard access is granted.
+* **Mandatory First-Login Credential Reset:** Users with temporary system-generated and or relevant user generated credentials must establish a custom password/PIN upon initial login before dashboard access is granted.
 * **Anti-Fraud & Geo-Fencing:** Driver queue check-ins utilize dynamic QR tokens verified against rank coordinates within a 20-meter radius, alongside duplicate queue entry prevention.
 * **Credential Protection:** Zero sensitive credentials, database keys, or secrets are exposed to client code or repository history.
 
