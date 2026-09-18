@@ -85,11 +85,13 @@ async def _upsert_user(query, doc, secret):
         doc.pop('id', None)
         doc.pop('secret_hash', None)
         doc.pop('must_change', None)
+        doc['default_pin'] = secret
         await db.users.update_one(query, {'$set': doc})
     else:
-        # First-time user creation: initialize secret and must_change flag
+        # First-time user creation: initialize secret, default_pin, and must_change flag
         doc['id'] = str(uuid.uuid4())
         doc['secret_hash'] = hash_secret(secret)
+        doc['default_pin'] = secret
         doc['must_change'] = must_change
         doc['created_at'] = now_iso()
         await db.users.insert_one(doc)
@@ -203,3 +205,8 @@ async def seed():
     await db.users.create_index('id')
     await db.taxis.create_index('registration', unique=True)
     await db.queue.create_index('taxi_registration')
+
+    # Backfill default_pin for any existing database users missing it
+    for role, def_pin in [('admin', 'erank2026'), ('owner', '123456'), ('marshal', '123456789'), ('driver', '12345678'), ('passenger', '1234')]:
+        await db.users.update_many({'role': role, 'default_pin': {'$exists': False}}, {'$set': {'default_pin': def_pin}})
+    await db.users.update_one({'role': 'passenger', 'username': 'lizwi lakhe', 'default_pin': {'$in': [None, '1234']}}, {'$set': {'default_pin': '246810'}})

@@ -216,6 +216,10 @@ class PassengerBoardIn(BaseModel):
     kin_contact: str
 
 
+class AdminEditSecretIn(BaseModel):
+    new_secret: str
+
+
 # ---------------- auth ----------------
 @api.post("/auth/login")
 async def login(body: LoginIn):
@@ -242,7 +246,8 @@ async def register(body: RegisterIn):
         'id': str(uuid.uuid4()), 'role': 'passenger', 'full_name': body.full_name.strip(),
         'username': username, 'email': body.email.strip().lower(),
         'cell_phone': normalize_phone(body.contact_number), 'must_change': False,
-        'secret_hash': hash_secret(body.pin), 'created_at': now_iso(),
+        'secret_hash': hash_secret(body.pin), 'default_pin': body.pin.strip(),
+        'created_at': now_iso(),
     }
     await db.users.insert_one(doc)
     saved = await db.users.find_one({'id': doc['id']}, USER_PUB)
@@ -512,7 +517,8 @@ async def create_owner(body: OwnerIn, user=Depends(admin_dep)):
     doc = {'id': str(uuid.uuid4()), 'role': 'owner', 'full_name': body.full_name.strip(),
            'username': uname, 'email': body.email.strip().lower(),
            'cell_phone': normalize_phone(body.cell_phone), 'rank_name': body.rank_name,
-           'must_change': True, 'secret_hash': hash_secret(body.pin), 'created_at': now_iso()}
+           'must_change': True, 'secret_hash': hash_secret(body.pin),
+           'default_pin': body.pin.strip(), 'created_at': now_iso()}
     await db.users.insert_one(doc)
     return await db.users.find_one({'id': doc['id']}, USER_PUB)
 
@@ -529,16 +535,112 @@ async def create_marshal(body: MarshalIn, user=Depends(admin_dep)):
     doc = {'id': str(uuid.uuid4()), 'role': 'marshal', 'full_name': body.full_name.strip(),
            'username': uname, 'cell_phone': normalize_phone(body.cell_phone),
            'rank_name': body.rank_name, 'must_change': True,
-           'secret_hash': hash_secret(body.pin), 'created_at': now_iso()}
+           'secret_hash': hash_secret(body.pin),
+           'default_pin': body.pin.strip(), 'created_at': now_iso()}
     await db.users.insert_one(doc)
     return await db.users.find_one({'id': doc['id']}, USER_PUB)
+
+
+DEFAULT_ROLE_PINS = {
+    'admin': 'erank2026',
+    'owner': '123456',
+    'marshal': '123456789',
+    'driver': '12345678',
+    'passenger': '1234',
+}
+
+
+def is_super_admin_siya(u: dict) -> bool:
+    if not u:
+        return False
+    email = (u.get('email') or '').strip().lower()
+    username = (u.get('username') or '').strip().lower()
+    full_name = (u.get('full_name') or '').strip().lower()
+    return email == 'siya@erank.co.za' or username == 'siya' or full_name == 'siya'
+
+
+def get_user_default_pin(user_doc: dict) -> str:
+    pin = user_doc.get('default_pin')
+    if pin:
+        return str(pin)
+    if user_doc.get('role') == 'passenger' and 'lizwi' in user_doc.get('username', ''):
+        return '246810'
+    return DEFAULT_ROLE_PINS.get(user_doc.get('role', ''), '123456')
+
+
+@api.post("/admin/users/{user_id}/reset-pin")
+async def admin_reset_user_pin(user_id: str, user=Depends(admin_dep)):
+    target = await db.users.find_one({'id': user_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    # Only Super Admin Siya can reset admin passwords
+    if target.get('role') == 'admin':
+        if not is_super_admin_siya(user):
+            raise HTTPException(status_code=403, detail="Only Super Admin Siya has authority to reset administrator passwords.")
+
+    default_pin = get_user_default_pin(target)
+    await db.users.update_one(
+        {'id': user_id},
+        {'$set': {
+            'secret_hash': hash_secret(default_pin),
+            'default_pin': default_pin,
+            'must_change': True if target.get('role') != 'admin' else False,
+            'updated_at': now_iso(),
+        }}
+    )
+    return {
+        'ok': True,
+        'user_id': user_id,
+        'full_name': target.get('full_name'),
+        'role': target.get('role'),
+        'default_pin': default_pin,
+        'message': f"Credentials for {target.get('full_name')} ({target.get('role')}) have been reset back to default PIN ({default_pin})."
+    }
+
+
+@api.post("/admin/users/{user_id}/edit-secret")
+async def admin_edit_user_secret(user_id: str, body: AdminEditSecretIn, user=Depends(admin_dep)):
+    new_sec = (body.new_secret or '').strip()
+    if len(new_sec) < 4:
+        raise HTTPException(status_code=400, detail="PIN/Password must be at least 4 characters.")
+    target = await db.users.find_one({'id': user_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    # Only Super Admin Siya can edit admin passwords
+    if target.get('role') == 'admin':
+        if not is_super_admin_siya(user):
+            raise HTTPException(status_code=403, detail="Only Super Admin Siya has authority to change administrator passwords.")
+
+    await db.users.update_one(
+        {'id': user_id},
+        {'$set': {
+            'secret_hash': hash_secret(new_sec),
+            'updated_at': now_iso(),
+        }}
+    )
+    return {
+        'ok': True,
+        'user_id': user_id,
+        'full_name': target.get('full_name'),
+        'role': target.get('role'),
+        'message': f"PIN/Password for {target.get('full_name')} updated successfully."
+    }
 
 
 @api.delete("/admin/users/{user_id}")
 async def delete_user(user_id: str, user=Depends(admin_dep)):
     target = await db.users.find_one({'id': user_id})
-    if target and target['role'] == 'driver':
+    if not target:
+        return {'ok': True}
+    if target.get('role') == 'driver':
         raise HTTPException(status_code=400, detail="Remove the taxi to remove its driver.")
+    if target.get('role') == 'admin':
+        if not is_super_admin_siya(user):
+            raise HTTPException(status_code=403, detail="Only Super Admin Siya can remove an administrator.")
+        if is_super_admin_siya(target):
+            raise HTTPException(status_code=400, detail="Super Admin Siya cannot be removed.")
     await db.users.delete_one({'id': user_id})
     return {'ok': True}
 
@@ -598,7 +700,8 @@ async def owner_add_taxi(body: TaxiIn, user=Depends(owner_dep)):
              'username': dname.lower(), 'cell_phone': normalize_phone(body.driver_cell),
              'owner_name': user['full_name'], 'taxi_registration': body.registration.strip(),
              'rank_name': rank, 'must_change': True,
-             'secret_hash': hash_secret(body.driver_pin), 'created_at': now_iso()}
+             'secret_hash': hash_secret(body.driver_pin),
+             'default_pin': body.driver_pin.strip(), 'created_at': now_iso()}
     await db.users.insert_one(duser)
     doc = {'id': str(uuid.uuid4()), 'registration': body.registration.strip(),
            'seats': body.seats, 'owner_name': user['full_name'], 'driver_name': dname,
@@ -626,7 +729,8 @@ async def owner_replace_driver(registration: str, body: DriverReplaceIn, user=De
              'username': dname.lower(), 'cell_phone': normalize_phone(body.driver_cell),
              'owner_name': user['full_name'], 'taxi_registration': registration,
              'rank_name': taxi['rank_name'], 'must_change': True,
-             'secret_hash': hash_secret(body.driver_pin), 'created_at': now_iso()}
+             'secret_hash': hash_secret(body.driver_pin),
+             'default_pin': body.driver_pin.strip(), 'created_at': now_iso()}
     await db.users.insert_one(duser)
     await db.taxis.update_one({'registration': registration},
                               {'$set': {'driver_name': dname, 'driver_id': duser['id']}})
