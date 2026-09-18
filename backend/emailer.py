@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 EMAIL_BASE_URL = os.environ.get("EMAIL_BASE_URL", "https://integrations.emergentagent.com")
-EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY", "")
+EMAIL_KEY = os.environ.get("ERANK_EMAIL_KEY") or os.environ.get("EMERGENT_EMAIL_KEY", "")
 EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "E-RANK Ops")
 EMAIL_REPLY_TO = os.environ.get("EMAIL_REPLY_TO", "")
 
@@ -88,7 +88,7 @@ def _assert_safe_email(subject: str, html: str) -> None:
 
 async def send_email(*, to: str, subject: str, html: str, reply_to: str | None = None):
     if not EMAIL_KEY:
-        logger.warning("Email notification skipped: EMERGENT_EMAIL_KEY not set.")
+        logger.warning("Email notification skipped: ERANK_EMAIL_KEY not set.")
         return None
     _assert_safe_email(subject, html)
     payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}

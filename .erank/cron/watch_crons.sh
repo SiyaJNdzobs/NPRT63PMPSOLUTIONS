@@ -6,8 +6,8 @@
 # reconcile retries next minute) and never exits non-zero.
 set -u
 
-YAML="${CRONS_YAML_FILE:-/app/.emergent/crons.yml}"
-APPLIED="${APPLIED_HASH_FILE:-/app/.emergent/cron/applied.hash}"
+YAML="${CRONS_YAML_FILE:-/app/.erank/crons.yml}"
+APPLIED="${APPLIED_HASH_FILE:-/app/.erank/cron/applied.hash}"
 JOB_ID="${JOB_ID:-}"
 CRON_API_URL="${CRON_API_URL:-}"
 

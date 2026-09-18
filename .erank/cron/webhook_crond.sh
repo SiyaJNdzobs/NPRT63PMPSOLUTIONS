@@ -8,7 +8,7 @@
 # last-rendered crons even before agent-service reconciles.
 set -eu
 
-CRON_DIR=/app/.emergent/cron
+CRON_DIR=/app/.erank/cron
 PERSIST="$CRON_DIR/webhook-crons"
 CRON_D=/etc/cron.d/webhook-crons
 DISPATCH="$CRON_DIR/dispatch_webhook.sh"

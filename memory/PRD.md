@@ -5,13 +5,13 @@ Dark-mode taxi rank operations platform for South African minibus taxi ranks. Ro
 
 ## Architecture
 - **Frontend:** React (CRA + craco, `@`→src alias), Tailwind + shadcn/ui, dark-mode only. React Query polling (3s) for near-realtime queue/status sync.
-- **Backend:** FastAPI. Files: `core.py` (Mongo, JWT bearer auth, phone/fare helpers, role guards), `seed.py` (idempotent seed of all provided data), `emailer.py` (Emergent Resend + guardrail gate), `server.py` (all routers).
+- **Backend:** FastAPI. Files: `core.py` (Mongo, JWT bearer auth, phone/fare helpers, role guards), `seed.py` (idempotent seed of all provided data), `emailer.py` (eRank Resend + guardrail gate), `server.py` (all routers).
 - **DB:** MongoDB, uuid `id` fields (no raw ObjectId returned).
 - **Auth:** JWT bearer tokens in localStorage. Admin = email+password; Owner/Marshal/Driver/Passenger = username(full name)+PIN. First-login `must_change` forces PIN/password change (set on insert only).
 
 ## User Choices (confirmed)
 - Admin: email+password; others: username+PIN.
-- SOS email via Emergent-managed Resend.
+- SOS email via eRank-managed Resend.
 - Marshal & Driver: only contact number editable (no email); Owner & Passenger edit email + number.
 - Excel export: real .xlsx (openpyxl).
 - Seed data provided by user (5 admins, 5 ranks, 5 owners, 5 marshals, 15 drivers, 15 taxis, routes, 1 passenger, 1 rank update).
