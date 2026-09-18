@@ -1,6 +1,13 @@
-Here is the **full updated `README.md`**, with the AI Assistant included in the Overview and all the changes we discussed.
 
 # E-RANK - Taxi Rank Management & Operations Platform
+
+---
+
+**Group Name:** PMP Solutions
+**Course:** NPRT630
+**Live Application:** [https://erank.onrender.com](https://erank.onrender.com)
+
+---
 
 ## Development Team
 
@@ -12,9 +19,6 @@ Here is the **full updated `README.md`**, with the AI Assistant included in the 
 | Louisa Mdluli               | 202324412      | [@Louisa322](https://github.com/Louisa322)                 |
 | Siyabonga José Ndzobondzobo | 202441850      | [@SiyaJNdzobs](https://github.com/SiyaJNdzobs)             |
 
-**Group Name:** PMP Solutions
-**Course:** NPRT630
-**Live Application:** [https://erank.onrender.com](https://erank.onrender.com)
 
 ---
 
