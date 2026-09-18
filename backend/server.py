@@ -432,6 +432,7 @@ async def public_taxi(registration: str):
         driver_contact = d.get('cell_phone') if d else None
     t['driver_contact'] = driver_contact
     t['verified'] = True
+    t['long_distance'] = is_long_distance(t.get('route', ''))  # tell frontend if this is long-distance
     base = APP_BASE_URL.rstrip('/') if APP_BASE_URL else 'https://erank.onrender.com'
     t['share_url'] = f"{base}/t/{t['registration'].replace(' ', '%20')}"
     return t
@@ -1200,25 +1201,24 @@ async def driver_join(body: JoinIn, user=Depends(driver_dep)):
 
     allowed_ranks = {taxi_home_rank}
     if taxi_is_long_distance:
-        # Extract both sides of the route to allow joining at destination rank
-        route_parts = re.split(r'[↔→]', taxi['route'])
-        for part in route_parts:
-            part = part.strip()
-            if part:
-                allowed_ranks.add(part)
-        # Also check if any known rank name appears as a substring in route parts
-        # This handles cases like "Indian Center Kimberly" matching rank "Indian Center"
+        # For long-distance taxis: allow ANY rank whose name appears anywhere in the route string.
+        # This covers routes stored as "Wandaras Johannesburg to Indian Center Kimberley",
+        # "Johannesburg ↔ Kimberley", "Wandaras → Uncedo", or any other format.
+        route_lower = taxi['route'].lower()
         all_ranks_cursor = db.ranks.find({}, {'rank_name': 1, '_id': 0})
         async for r in all_ranks_cursor:
             rn = r['rank_name']
-            for part in route_parts:
-                if rn.lower() in part.strip().lower():
-                    allowed_ranks.add(rn)
+            if rn.lower() in route_lower:
+                allowed_ranks.add(rn)
+        # Also add any raw token from the route split on common separators
+        for sep_part in re.split(r'[↔→\-]|\bto\b', taxi['route'], flags=re.IGNORECASE):
+            allowed_ranks.add(sep_part.strip())
 
     if scanned_rank not in allowed_ranks:
         raise HTTPException(
             status_code=400,
-            detail=f"Wrong rank. Your taxi operates between {' ↔ '.join(sorted(allowed_ranks))}."
+            detail=f"Wrong rank. Your taxi route does not include {scanned_rank}. "
+                   f"Allowed ranks for this taxi: {', '.join(sorted(r for r in allowed_ranks if r))}."
         )
 
     # Use the scanned rank for queue entry so revenue is recorded at the correct rank

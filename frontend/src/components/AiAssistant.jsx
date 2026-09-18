@@ -36,9 +36,10 @@ export function AiAssistant() {
 
   // Must NOT be shown on the public link shared with next of kin (/t/:registration)
   const isPublicSharePage = location.pathname.startsWith("/t/");
-  if (isPublicSharePage) {
-    return null;
-  }
+  if (isPublicSharePage) return null;
+
+  // Only show to logged-in users (so it can greet them by name and know their role)
+  if (!user) return null;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
