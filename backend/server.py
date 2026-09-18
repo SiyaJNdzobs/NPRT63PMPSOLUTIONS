@@ -1,4 +1,5 @@
 import io
+import re
 import uuid
 import base64
 import logging
@@ -1179,33 +1180,66 @@ async def driver_join(body: JoinIn, user=Depends(driver_dep)):
     taxi = await driver_taxi(user)
     if not taxi:
         raise HTTPException(status_code=404, detail="No taxi assigned to you.")
-    if rank['rank_name'] != taxi['rank_name']:
-        raise HTTPException(status_code=400,
-                            detail=f"Wrong rank. You are assigned to {taxi['rank_name']}.")
+
+    # --- Dual-rank check for long-distance taxis ---
+    # Long-distance taxis can scan into EITHER their home rank OR the destination rank
+    # (the other rank name in the route string, separated by ↔ or →).
+    taxi_home_rank = taxi['rank_name']
+    scanned_rank = rank['rank_name']
+    taxi_is_long_distance = is_long_distance(taxi['route'])
+
+    allowed_ranks = {taxi_home_rank}
+    if taxi_is_long_distance:
+        # Extract both sides of the route to allow joining at destination rank
+        route_parts = re.split(r'[↔→]', taxi['route'])
+        for part in route_parts:
+            part = part.strip()
+            if part:
+                allowed_ranks.add(part)
+        # Also check if any known rank name appears as a substring in route parts
+        # This handles cases like "Indian Center Kimberly" matching rank "Indian Center"
+        all_ranks_cursor = db.ranks.find({}, {'rank_name': 1, '_id': 0})
+        async for r in all_ranks_cursor:
+            rn = r['rank_name']
+            for part in route_parts:
+                if rn.lower() in part.strip().lower():
+                    allowed_ranks.add(rn)
+
+    if scanned_rank not in allowed_ranks:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Wrong rank. Your taxi operates between {' ↔ '.join(sorted(allowed_ranks))}."
+        )
+
+    # Use the scanned rank for queue entry so revenue is recorded at the correct rank
+    joining_rank = scanned_rank
+
     if rank.get('geo_check_enabled'):
         if body.lat is None or body.lng is None:
-            raise HTTPException(status_code=400, detail="Location is required to join this rank.")
+            raise HTTPException(status_code=400,
+                                detail="Location sharing is required to join this rank. Please enable GPS and try again.")
         if rank.get('geo_lat') is not None and rank.get('geo_lng') is not None:
             dist = haversine_m(body.lat, body.lng, rank['geo_lat'], rank['geo_lng'])
             if dist > 20:
                 raise HTTPException(status_code=400,
-                                    detail=f"You are {int(dist)}m away. Move within 20m of the rank to join.")
+                                    detail="You are not within 20 metres of the rank. Please go to the rank to be able to join the queue.")
     if taxi.get('active_queue'):
         raise HTTPException(status_code=400, detail="Your taxi is already in the queue.")
     entry = {'id': str(uuid.uuid4()), 'taxi_registration': taxi['registration'],
-             'rank_name': taxi['rank_name'], 'driver_id': user['id'],
+             'rank_name': joining_rank, 'home_rank_name': taxi_home_rank,
+             'driver_id': user['id'],
              'driver_name': user['full_name'], 'owner_name': taxi.get('owner_name'),
              'route': taxi['route'], 'seats': taxi['seats'],
              'fare_amount': taxi['fare_amount'], 'fare_label': taxi['fare_label'],
-             'long_distance': is_long_distance(taxi['route']),
+             'long_distance': taxi_is_long_distance,
              'status': 'waiting', 'joined_at': now_iso(), 'added_by': 'driver'}
     await db.queue.insert_one(entry)
-    if entry['long_distance']:
+    if taxi_is_long_distance:
         request_doc = {
             'id': str(uuid.uuid4()),
             'queue_id': entry['id'],
             'taxi_registration': taxi['registration'],
-            'rank_name': taxi['rank_name'],
+            'rank_name': joining_rank,
             'driver_name': user['full_name'],
             'route': taxi['route'],
             'seat_count': taxi['seats'],

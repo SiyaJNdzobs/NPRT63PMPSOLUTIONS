@@ -17,19 +17,33 @@ import { toast } from "sonner";
 
 const empty = { registration: "", seats: 15, route: "", fare: "", driver_name: "", driver_cell: "", driver_pin: "" };
 
+// SA phone: +27 prefix + 9 digits. After stripping +27 or leading 0, must have exactly 9 digits.
+function validateSAPhone(raw) {
+  if (!raw || !raw.trim()) return "Cell number is required.";
+  const digits = raw.replace(/\D/g, "");
+  const local = digits.startsWith("27") ? digits.slice(2) : digits.startsWith("0") ? digits.slice(1) : digits;
+  if (local.length !== 9) return "Enter a valid South African number: +27 followed by 9 digits (e.g. +27 81 234 5678).";
+  return null;
+}
+
 export default function OwnerDashboard() {
   const qc = useQueryClient();
   const [result, setResult] = useState(null);
   const [expandedReg, setExpandedReg] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [taxiForm, setTaxiForm] = useState(empty);
+  const [taxiCellError, setTaxiCellError] = useState(null);
   const [replaceReg, setReplaceReg] = useState(null);
   const [drv, setDrv] = useState({ driver_name: "", driver_cell: "", driver_pin: "" });
+  const [drvCellError, setDrvCellError] = useState(null);
 
   const taxisQ = useQuery({ queryKey: ["o-taxis"], queryFn: async () => (await api.get("/owner/taxis")).data, refetchInterval: 5000 });
   const revQ = useQuery({ queryKey: ["o-rev"], queryFn: async () => (await api.get("/owner/revenue")).data, refetchInterval: 5000 });
 
   const addTaxi = async () => {
+    const err = validateSAPhone(taxiForm.driver_cell);
+    if (err) { setTaxiCellError(err); return; }
+    setTaxiCellError(null);
     try {
       await api.post("/owner/taxis", taxiForm);
       setAddOpen(false);
@@ -42,6 +56,9 @@ export default function OwnerDashboard() {
   };
 
   const replaceDriver = async () => {
+    const err = validateSAPhone(drv.driver_cell);
+    if (err) { setDrvCellError(err); return; }
+    setDrvCellError(null);
     try {
       await api.put(`/owner/taxis/${encodeURIComponent(replaceReg)}/driver`, drv);
       setReplaceReg(null);
@@ -118,7 +135,10 @@ export default function OwnerDashboard() {
                     <Field label="Route" testid="taxi-route" value={taxiForm.route} onChange={(v) => setTaxiForm({ ...taxiForm, route: v })} />
                     <Field label="Fare (e.g. 26)" testid="taxi-fare" value={taxiForm.fare} onChange={(v) => setTaxiForm({ ...taxiForm, fare: v })} />
                     <Field label="Driver name" testid="taxi-driver-name" value={taxiForm.driver_name} onChange={(v) => setTaxiForm({ ...taxiForm, driver_name: v })} />
-                    <Field label="Driver cell" testid="taxi-driver-cell" value={taxiForm.driver_cell} onChange={(v) => setTaxiForm({ ...taxiForm, driver_cell: v })} />
+                    <div>
+                      <Field label="Driver cell (+27…)" testid="taxi-driver-cell" value={taxiForm.driver_cell} onChange={(v) => { setTaxiForm({ ...taxiForm, driver_cell: v }); setTaxiCellError(null); }} />
+                      {taxiCellError && <p className="text-red-400 text-xs mt-1">{taxiCellError}</p>}
+                    </div>
                     <Field label="Driver PIN" testid="taxi-driver-pin" value={taxiForm.driver_pin} onChange={(v) => setTaxiForm({ ...taxiForm, driver_pin: v })} />
                   </div>
                   <DialogFooter>
@@ -216,7 +236,10 @@ export default function OwnerDashboard() {
           <DialogHeader><DialogTitle className="text-white font-heading">Replace driver for {replaceReg}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <Field label="New driver name" testid="replace-name" value={drv.driver_name} onChange={(v) => setDrv({ ...drv, driver_name: v })} />
-            <Field label="Cell number" testid="replace-cell" value={drv.driver_cell} onChange={(v) => setDrv({ ...drv, driver_cell: v })} />
+            <div>
+              <Field label="Cell number (+27…)" testid="replace-cell" value={drv.driver_cell} onChange={(v) => { setDrv({ ...drv, driver_cell: v }); setDrvCellError(null); }} />
+              {drvCellError && <p className="text-red-400 text-xs mt-1">{drvCellError}</p>}
+            </div>
             <Field label="Initial PIN" testid="replace-pin" value={drv.driver_pin} onChange={(v) => setDrv({ ...drv, driver_pin: v })} />
           </div>
           <DialogFooter>

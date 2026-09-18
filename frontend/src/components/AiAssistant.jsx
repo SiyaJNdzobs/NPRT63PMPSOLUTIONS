@@ -302,7 +302,7 @@ export function AiAssistant() {
               >
                 {m.sender === "bot" && (
                   <div className="h-7 w-7 rounded-lg bg-primary/20 text-primary flex items-center justify-center shrink-0 mt-0.5">
-                    <Bot size={15} />
+                    <MessageSquare size={15} />
                   </div>
                 )}
                 <div

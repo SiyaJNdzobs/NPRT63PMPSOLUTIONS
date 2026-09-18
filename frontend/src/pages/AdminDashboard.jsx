@@ -37,11 +37,32 @@ export default function AdminDashboard() {
   const [routeForm, setRouteForm] = useState({ rank_name: "", route: "", fare: "" });
   const [ownerForm, setOwnerForm] = useState({ full_name: "", email: "", cell_phone: "", rank_name: "", pin: "123456" });
   const [marshalForm, setMarshalForm] = useState({ full_name: "", cell_phone: "", rank_name: "", pin: "123456789" });
+  const [ownerCellError, setOwnerCellError] = useState(null);
+  const [marshalCellError, setMarshalCellError] = useState(null);
+
+  // SA phone: +27 prefix + 9 digits. After stripping +27 or leading 0, must have exactly 9 digits.
+  const validateSAPhone = (raw) => {
+    if (!raw || !raw.trim()) return "Cell number is required.";
+    const digits = raw.replace(/\D/g, "");
+    const local = digits.startsWith("27") ? digits.slice(2) : digits.startsWith("0") ? digits.slice(1) : digits;
+    if (local.length !== 9) return "Enter a valid South African number: +27 followed by 9 digits (e.g. +27 81 234 5678).";
+    return null;
+  };
 
   const createRank = async () => { try { await api.post("/admin/ranks", rankForm); toast.success("Rank added"); setRankForm({ rank_name: "", location: "" }); invalidate("a-ranks", "a-ov"); } catch (e) { toast.error(apiError(e)); } };
   const createRoute = async () => { try { await api.post("/admin/routes", routeForm); toast.success("Route added"); setRouteForm({ rank_name: "", route: "", fare: "" }); invalidate("a-routes", "a-ov"); } catch (e) { toast.error(apiError(e)); } };
-  const createOwner = async () => { try { await api.post("/admin/owners", ownerForm); setResult({ type: "success", title: "Owner added", message: `${ownerForm.full_name} can sign in with PIN ${ownerForm.pin}.` }); setOwnerForm({ full_name: "", email: "", cell_phone: "", rank_name: "", pin: "123456" }); invalidate("a-owners", "a-ov"); } catch (e) { setResult({ type: "error", title: "Cannot add owner", message: apiError(e) }); } };
-  const createMarshal = async () => { try { await api.post("/admin/marshals", marshalForm); setResult({ type: "success", title: "Marshal added", message: `${marshalForm.full_name} can sign in with PIN ${marshalForm.pin}.` }); setMarshalForm({ full_name: "", cell_phone: "", rank_name: "", pin: "123456789" }); invalidate("a-marshals", "a-ov"); } catch (e) { setResult({ type: "error", title: "Cannot add marshal", message: apiError(e) }); } };
+  const createOwner = async () => {
+    const err = validateSAPhone(ownerForm.cell_phone);
+    if (err) { setOwnerCellError(err); return; }
+    setOwnerCellError(null);
+    try { await api.post("/admin/owners", ownerForm); setResult({ type: "success", title: "Owner added", message: `${ownerForm.full_name} can sign in with PIN ${ownerForm.pin}.` }); setOwnerForm({ full_name: "", email: "", cell_phone: "", rank_name: "", pin: "123456" }); invalidate("a-owners", "a-ov"); } catch (e) { setResult({ type: "error", title: "Cannot add owner", message: apiError(e) }); }
+  };
+  const createMarshal = async () => {
+    const err = validateSAPhone(marshalForm.cell_phone);
+    if (err) { setMarshalCellError(err); return; }
+    setMarshalCellError(null);
+    try { await api.post("/admin/marshals", marshalForm); setResult({ type: "success", title: "Marshal added", message: `${marshalForm.full_name} can sign in with PIN ${marshalForm.pin}.` }); setMarshalForm({ full_name: "", cell_phone: "", rank_name: "", pin: "123456789" }); invalidate("a-marshals", "a-ov"); } catch (e) { setResult({ type: "error", title: "Cannot add marshal", message: apiError(e) }); }
+  };
   const delUser = async (id) => { try { await api.delete(`/admin/users/${id}`); toast.success("Removed"); invalidate("a-owners", "a-marshals", "a-ov"); } catch (e) { toast.error(apiError(e)); } };
   const delRank = async (id) => { await api.delete(`/admin/ranks/${id}`); invalidate("a-ranks", "a-ov"); };
   const delRoute = async (id) => { await api.delete(`/admin/routes/${id}`); invalidate("a-routes", "a-ov"); };
@@ -120,7 +141,10 @@ export default function AdminDashboard() {
             <Card className="bg-[#181F2C] border-[#263144] p-4 flex flex-wrap gap-2 items-end">
               <Inline label="Full name" v={ownerForm.full_name} on={(v) => setOwnerForm({ ...ownerForm, full_name: v })} testid="owner-name" />
               <Inline label="Email" v={ownerForm.email} on={(v) => setOwnerForm({ ...ownerForm, email: v })} testid="owner-email" />
-              <Inline label="Cell" v={ownerForm.cell_phone} on={(v) => setOwnerForm({ ...ownerForm, cell_phone: v })} testid="owner-cell" />
+              <div>
+                <Inline label="Cell (+27…)" v={ownerForm.cell_phone} on={(v) => { setOwnerForm({ ...ownerForm, cell_phone: v }); setOwnerCellError(null); }} testid="owner-cell" />
+                {ownerCellError && <p className="text-red-400 text-xs mt-1 max-w-[220px]">{ownerCellError}</p>}
+              </div>
               <SelInline label="Rank" v={ownerForm.rank_name} on={(v) => setOwnerForm({ ...ownerForm, rank_name: v })} options={rankOptions} testid="owner-rank" />
               <Button onClick={createOwner} data-testid="create-owner-btn" className="bg-primary text-black gap-1 h-10"><Plus size={14} /> Add owner</Button>
             </Card>
@@ -130,7 +154,10 @@ export default function AdminDashboard() {
           <TabsContent value="marshals" className="pt-4 space-y-4">
             <Card className="bg-[#181F2C] border-[#263144] p-4 flex flex-wrap gap-2 items-end">
               <Inline label="Full name" v={marshalForm.full_name} on={(v) => setMarshalForm({ ...marshalForm, full_name: v })} testid="marshal-name" />
-              <Inline label="Cell" v={marshalForm.cell_phone} on={(v) => setMarshalForm({ ...marshalForm, cell_phone: v })} testid="marshal-cell" />
+              <div>
+                <Inline label="Cell (+27…)" v={marshalForm.cell_phone} on={(v) => { setMarshalForm({ ...marshalForm, cell_phone: v }); setMarshalCellError(null); }} testid="marshal-cell" />
+                {marshalCellError && <p className="text-red-400 text-xs mt-1 max-w-[220px]">{marshalCellError}</p>}
+              </div>
               <SelInline label="Rank" v={marshalForm.rank_name} on={(v) => setMarshalForm({ ...marshalForm, rank_name: v })} options={rankOptions} testid="marshal-rank" />
               <Button onClick={createMarshal} data-testid="create-marshal-btn" className="bg-primary text-black gap-1 h-10"><Plus size={14} /> Add marshal</Button>
             </Card>

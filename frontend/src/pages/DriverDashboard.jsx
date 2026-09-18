@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bus, AlertTriangle, MapPin, Loader2, Camera, Users, ListOrdered, CheckCircle2, RefreshCw } from "lucide-react";
+import { Bus, AlertTriangle, MapPin, Loader2, Camera, Users, ListOrdered, CheckCircle2, RefreshCw, Navigation, X } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -23,6 +23,31 @@ export default function DriverDashboard() {
   const [busy, setBusy] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  // GPS location consent — same pattern as PassengerDashboard
+  const [locationConsent, setLocationConsent] = useState(null); // null=unknown, 'granted', 'denied'
+  const [consentOpen, setConsentOpen] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("erank_driver_location_consent");
+    if (saved === "granted" || saved === "denied") {
+      setLocationConsent(saved);
+    } else {
+      // First time — show the consent dialog
+      setConsentOpen(true);
+    }
+  }, []);
+
+  const grantConsent = () => {
+    localStorage.setItem("erank_driver_location_consent", "granted");
+    setLocationConsent("granted");
+    setConsentOpen(false);
+  };
+
+  const denyConsent = () => {
+    localStorage.setItem("erank_driver_location_consent", "denied");
+    setLocationConsent("denied");
+    setConsentOpen(false);
+  };
 
   const { data: status } = useQuery({
     queryKey: ["driver-status"],
@@ -63,10 +88,25 @@ export default function DriverDashboard() {
         setResult({ type: "error", title: "Cannot join", message: apiError(e) });
       } finally { setBusy(false); }
     };
+
+    if (locationConsent === "denied") {
+      // Consent denied — still send null coords; backend will reject if geo-check is on
+      send(null, null);
+      return;
+    }
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (p) => send(p.coords.latitude, p.coords.longitude),
-        () => send(null, null),
+        () => {
+          // Browser denied GPS at OS level even though user said yes in app
+          setResult({
+            type: "error",
+            title: "Location unavailable",
+            message: "Your device denied GPS access. Please enable location in your phone/browser settings and try again.",
+          });
+          setBusy(false);
+        },
         { enableHighAccuracy: true, timeout: 8000 }
       );
     } else send(null, null);
@@ -107,6 +147,40 @@ export default function DriverDashboard() {
   return (
     <div className="min-h-screen bg-[#0A0D14] text-white">
       <AppHeader />
+
+      {/* GPS Location Consent Modal */}
+      <Dialog open={consentOpen} onOpenChange={() => {}}>
+        <DialogContent className="bg-[#181F2C] border-[#263144] max-w-sm" data-testid="driver-gps-consent-dialog">
+          <DialogHeader>
+            <DialogTitle className="text-white font-heading flex items-center gap-2">
+              <Navigation size={20} className="text-primary" /> Allow Location Access
+            </DialogTitle>
+            <DialogDescription className="text-slate-300 pt-2 leading-relaxed">
+              E-RANK uses your GPS location to verify you are at the rank before allowing you to join the queue.
+              <br /><br />
+              <span className="text-slate-400 text-xs">If geo-check is enabled at your rank, you must be within 20 metres to join.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 mt-2">
+            <Button
+              onClick={grantConsent}
+              data-testid="driver-gps-allow-btn"
+              className="bg-primary text-black hover:bg-primary/90 gap-2 flex-1"
+            >
+              <Navigation size={16} /> Allow location
+            </Button>
+            <Button
+              onClick={denyConsent}
+              variant="outline"
+              data-testid="driver-gps-deny-btn"
+              className="border-[#334155] text-slate-300 gap-2 flex-1"
+            >
+              <X size={16} /> Decline
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -126,6 +200,34 @@ export default function DriverDashboard() {
             <RefreshCw size={14} /> Refresh
           </Button>
         </div>
+
+        {/* GPS Location Status Banner */}
+        {locationConsent === "denied" && (
+          <div className="flex items-center gap-3 bg-amber-950/50 border border-amber-500/40 rounded-xl px-4 py-3 text-sm" data-testid="driver-gps-denied-banner">
+            <Navigation size={16} className="text-amber-400 shrink-0" />
+            <span className="text-amber-200 flex-1">Location sharing is off. Geo-checked ranks may prevent you from joining the queue.</span>
+            <button
+              onClick={() => setConsentOpen(true)}
+              className="text-xs text-primary underline shrink-0"
+              data-testid="driver-gps-change-btn"
+            >
+              Change
+            </button>
+          </div>
+        )}
+        {locationConsent === "granted" && (
+          <div className="flex items-center gap-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-4 py-3 text-sm" data-testid="driver-gps-granted-banner">
+            <Navigation size={16} className="text-emerald-400 shrink-0" />
+            <span className="text-emerald-200 flex-1">Location sharing on · GPS will verify you are at the rank when joining the queue.</span>
+            <button
+              onClick={() => { localStorage.removeItem("erank_driver_location_consent"); setConsentOpen(true); }}
+              className="text-xs text-slate-400 underline shrink-0"
+              data-testid="driver-gps-change-btn"
+            >
+              Change
+            </button>
+          </div>
+        )}
 
         {/* In-App Driver Notifications (e.g. Queue Skipped Reason from Marshal) */}
         {status?.notifications && status.notifications.length > 0 && (
