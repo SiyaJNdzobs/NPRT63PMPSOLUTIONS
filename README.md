@@ -72,13 +72,9 @@ At the rank, the **Marshal** displays the QR code, publishes rank updates, and m
 Passengers search routes and fares, board taxis, and complete a digital manifest with next-of-kin details. They can share their journey and live location with family through WhatsApp. Marshals can capture details for passengers without smartphones.
 
 When the Marshal presses **Depart**, E-RANK records the trip and automatically calculates revenue based on actual passengers for long-distance trips or vehicle seats for local routes.
-
 During the journey, the Driver can trigger an **SOS** alert containing live location information. At the destination, a long-distance taxi can scan the return rank's QR code and join the return queue.
 
 ---
 
 
-## E-RANK Investor Test Cases — End-to-End Test Cases
-
-> **Notice:** The comprehensive End-to-End Test Suite is broken down into structured, modular test cases and is uploaded directly in this repository in Test Cases File (Erank Test cases.xlsx)
 
