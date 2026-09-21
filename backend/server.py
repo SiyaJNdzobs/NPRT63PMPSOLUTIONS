@@ -257,12 +257,6 @@ class UpdateLocationIn(BaseModel):
     passenger_name: Optional[str] = None
 
 
-class AskAiIn(BaseModel):
-    message: str
-    language: Optional[str] = "English"
-    user_name: Optional[str] = None
-
-
 class PassengerBoardIn(BaseModel):
     registration: str
     passenger_name: str           # → name in manifest
@@ -270,10 +264,6 @@ class PassengerBoardIn(BaseModel):
     destination: Optional[str] = ""  # → destination
     kin_name: str
     kin_contact: str
-
-
-class AdminEditSecretIn(BaseModel):
-    new_secret: str
 
 
 # ---------------- auth ----------------
@@ -652,36 +642,6 @@ async def admin_reset_user_pin(user_id: str, user=Depends(admin_dep)):
         'role': target.get('role'),
         'default_pin': default_pin,
         'message': f"Credentials for {target.get('full_name')} ({target.get('role')}) have been reset back to default PIN ({default_pin})."
-    }
-
-
-@api.post("/admin/users/{user_id}/edit-secret")
-async def admin_edit_user_secret(user_id: str, body: AdminEditSecretIn, user=Depends(admin_dep)):
-    new_sec = (body.new_secret or '').strip()
-    if len(new_sec) < 4:
-        raise HTTPException(status_code=400, detail="PIN/Password must be at least 4 characters.")
-    target = await db.users.find_one({'id': user_id})
-    if not target:
-        raise HTTPException(status_code=404, detail="User not found.")
-
-    # Only Super Admin Siya can edit admin passwords
-    if target.get('role') == 'admin':
-        if not is_super_admin_siya(user):
-            raise HTTPException(status_code=403, detail="Only Super Admin Siya has authority to change administrator passwords.")
-
-    await db.users.update_one(
-        {'id': user_id},
-        {'$set': {
-            'secret_hash': hash_secret(new_sec),
-            'updated_at': now_iso(),
-        }}
-    )
-    return {
-        'ok': True,
-        'user_id': user_id,
-        'full_name': target.get('full_name'),
-        'role': target.get('role'),
-        'message': f"PIN/Password for {target.get('full_name')} updated successfully."
     }
 
 
@@ -1726,86 +1686,6 @@ async def passenger_board(body: PassengerBoardIn):
         'route': taxi.get('route', ''),
         'rank_name': entry['rank_name'],
         'passenger_count': pax_count,
-    }
-
-
-# ---------------- AI Assistant (Unscripted & Real AI) ----------------
-@api.post("/public/ai/assistant")
-async def ai_assistant(body: AskAiIn):
-    query = (body.message or "").strip()
-    lang = body.language or "English"
-    user_name = (body.user_name or "").strip()
-
-    if not query:
-        greeting = f"Hello {user_name}!" if user_name else "Hello!"
-        return {
-            'reply': f"{greeting} How can I help you with taxi ranks, routes, fares or safe travel today?",
-            'language': lang
-        }
-
-    # Fetch live database records to ground the real AI in factual platform data
-    ranks = await db.ranks.find({}, {'_id': 0, 'rank_name': 1, 'location': 1}).to_list(100)
-    routes = await db.routes.find({}, {'_id': 0, 'rank_name': 1, 'route': 1, 'fare_label': 1}).to_list(200)
-
-    ranks_summary = ", ".join([f"{r['rank_name']} in {r.get('location', '')}" for r in ranks])
-    routes_summary = "; ".join([f"{r['route']} ({r['rank_name']} -> {r.get('fare_label', '')})" for r in routes[:35]])
-
-    system_prompt = (
-        f"CRITICAL INSTRUCTION: You MUST write your ENTIRE response in {lang} only. "
-        f"Do NOT use English at all unless the selected language IS English. "
-        f"If {lang} is isiZulu respond fully in isiZulu. If {lang} is Afrikaans respond in Afrikaans. "
-        f"If {lang} is isiXhosa respond in isiXhosa. If {lang} is Sesotho respond in Sesotho. "
-        f"If {lang} is Setswana respond in Setswana. Never mix languages in your reply. "
-        f"You are the intelligent AI Assistant for E-RANK, a South African minibus taxi platform. "
-        f"User name: {user_name if user_name else 'User'}. "
-        f"Real in-app database data:\n"
-        f"Ranks on E-RANK: {ranks_summary}\n"
-        f"Routes and Fares: {routes_summary}\n\n"
-        f"User message: {query}\n\n"
-        f"Guidelines:\n"
-        f"- Answer naturally like a real AI. Do not repeat robotic scripts.\n"
-        f"- Answer to your best general knowledge about South Africa, taxi routes, travel, and fares.\n"
-        f"- If the city or rank is on E-RANK, quote the actual fare/location.\n"
-        f"- If the user asks about other cities or towns (like Durban, Cape Town, etc.), share your knowledge helpfully and mention those ranks are not yet registered on E-RANK.\n"
-        f"- Do NOT tell the user 'please speak to a marshal' unless they specifically ask who is in charge on site.\n"
-        f"- Keep the answer concise (2-4 sentences), friendly, and practical.\n"
-        f"- REMEMBER: Your ENTIRE response must be in {lang}."
-    )
-
-    import urllib.request
-    from urllib.parse import quote_plus
-    try:
-        url = f"https://text.pollinations.ai/{quote_plus(system_prompt)}"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            raw = resp.read().decode('utf-8', errors='ignore')
-            clean = raw.split('---')[0].strip()
-            if clean:
-                return {'reply': clean, 'language': lang}
-    except Exception as e:
-        logger.warning(f"Live AI completion notice: {e}")
-
-    # Natural fallback if external connection is slow
-    q_lower = query.lower()
-    matched_routes = [r for r in routes if any(w in r['route'].lower() for w in q_lower.split() if len(w) > 3)]
-    matched_ranks = [r for r in ranks if r['rank_name'].lower() in q_lower or r.get('location', '').lower() in q_lower]
-
-    if matched_routes:
-        rt = matched_routes[0]
-        return {
-            'reply': f"For {rt['route']}, taxis depart from {rt['rank_name']} with an official fare of {rt.get('fare_label', 'N/A')}.",
-            'language': lang
-        }
-    elif matched_ranks:
-        rk = matched_ranks[0]
-        return {
-            'reply': f"{rk['rank_name']} is located in {rk.get('location', 'South Africa')}. You can find verified operating taxis and fares for this rank on E-RANK.",
-            'language': lang
-        }
-
-    return {
-        'reply': f"I understand you're asking about '{query}'. While our live system currently covers verified ranks across Johannesburg and Kimberley, I can help you with fares, routes, or safe ride tracking across the platform.",
-        'language': lang
     }
 
 

@@ -4,7 +4,6 @@ import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import { RoleGuard } from "@/components/RoleGuard";
 import { AppFooter } from "@/components/AppFooter";
-import { AiAssistant } from "@/components/AiAssistant";
 import Landing from "@/pages/Landing";
 import SignIn from "@/pages/SignIn";
 import ChangeSecret from "@/pages/ChangeSecret";
@@ -33,7 +32,6 @@ function App() {
             <Route path="/scan" element={<Scan />} />
             <Route path="/t/:registration" element={<PublicShare />} />
           </Routes>
-          <AiAssistant />
           <AppFooter />
         </BrowserRouter>
       </AuthProvider>

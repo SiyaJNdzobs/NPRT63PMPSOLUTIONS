@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, ShieldCheck, AlertTriangle, RefreshCw, KeyRound, Edit2, RotateCcw, Crown, Check } from "lucide-react";
+import { Plus, Trash2, ShieldCheck, AlertTriangle, RefreshCw, RotateCcw, Crown } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -42,15 +42,10 @@ export default function AdminDashboard() {
 
   const invalidate = (...keys) => keys.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 
-  // Credential Reset & Edit state
+  // Credential Reset state
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState(null);
   const [resetting, setResetting] = useState(false);
-
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState(null);
-  const [newSecret, setNewSecret] = useState("");
-  const [savingSecret, setSavingSecret] = useState(false);
 
   const openResetModal = (u) => {
     setResetTarget(u);
@@ -69,34 +64,6 @@ export default function AdminDashboard() {
       toast.error(apiError(e));
     } finally {
       setResetting(false);
-    }
-  };
-
-  const openEditModal = (u) => {
-    setEditTarget(u);
-    setNewSecret("");
-    setEditModalOpen(true);
-  };
-
-  const handleSaveSecret = async () => {
-    if (!editTarget) return;
-    if (!newSecret || newSecret.trim().length < 4) {
-      toast.error("PIN/Password must be at least 4 characters.");
-      return;
-    }
-    setSavingSecret(true);
-    try {
-      const { data } = await api.post(`/admin/users/${editTarget.id}/edit-secret`, {
-        new_secret: newSecret.trim(),
-      });
-      toast.success(data.message || "PIN/Password updated successfully");
-      invalidate("a-owners", "a-marshals", "a-drivers", "a-passengers", "a-admins");
-      setEditModalOpen(false);
-      setNewSecret("");
-    } catch (e) {
-      toast.error(apiError(e));
-    } finally {
-      setSavingSecret(false);
     }
   };
 
@@ -217,7 +184,7 @@ export default function AdminDashboard() {
               <SelInline label="Rank" v={ownerForm.rank_name} on={(v) => setOwnerForm({ ...ownerForm, rank_name: v })} options={rankOptions} testid="owner-rank" />
               <Button onClick={createOwner} data-testid="create-owner-btn" className="bg-primary text-black gap-1 h-10"><Plus size={14} /> Add owner</Button>
             </Card>
-            <UserTable users={owners.data} onDelete={delUser} onReset={openResetModal} onEdit={openEditModal} showEmail testid="admin-owner-row" />
+            <UserTable users={owners.data} onDelete={delUser} onReset={openResetModal} showEmail testid="admin-owner-row" />
           </TabsContent>
 
           <TabsContent value="marshals" className="pt-4 space-y-4">
@@ -230,11 +197,11 @@ export default function AdminDashboard() {
               <SelInline label="Rank" v={marshalForm.rank_name} on={(v) => setMarshalForm({ ...marshalForm, rank_name: v })} options={rankOptions} testid="marshal-rank" />
               <Button onClick={createMarshal} data-testid="create-marshal-btn" className="bg-primary text-black gap-1 h-10"><Plus size={14} /> Add marshal</Button>
             </Card>
-            <UserTable users={marshals.data} onDelete={delUser} onReset={openResetModal} onEdit={openEditModal} testid="admin-marshal-row" />
+            <UserTable users={marshals.data} onDelete={delUser} onReset={openResetModal} testid="admin-marshal-row" />
           </TabsContent>
 
           <TabsContent value="drivers" className="pt-4">
-            <TableWrap head={["Driver", "Cell", "Owner", "Taxi", "Rank", "Default PIN", "Actions"]}>
+            <TableWrap head={["Driver", "Cell", "Owner", "Taxi", "Rank", "Actions"]}>
               {(drivers.data || []).map((d) => (
                 <tr key={d.id} data-testid="admin-driver-row" className="border-t border-[#263144]">
                   <td className="px-4 py-3 text-white font-medium">{d.full_name}</td>
@@ -242,28 +209,17 @@ export default function AdminDashboard() {
                   <td className="px-4 py-3 text-slate-300">{d.owner_name}</td>
                   <td className="px-4 py-3 font-mono text-slate-300">{d.taxi_registration}</td>
                   <td className="px-4 py-3 text-slate-300">{d.rank_name}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-primary">{d.default_pin || "12345678"}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1">
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => openResetModal({ ...d, role: "driver", default_pin: d.default_pin || "12345678" })}
+                        onClick={() => openResetModal({ ...d, role: "driver" })}
                         className="h-8 px-2 text-amber-400 hover:bg-amber-400/10 gap-1 text-xs"
                         title="Reset to default driver PIN (12345678)"
                         data-testid={`reset-driver-pin-btn-${d.id}`}
                       >
                         <RotateCcw size={13} /> Reset PIN
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => openEditModal({ ...d, role: "driver" })}
-                        className="h-8 px-2 text-cyan-400 hover:bg-cyan-400/10 gap-1 text-xs"
-                        title="Edit driver PIN"
-                        data-testid={`edit-driver-pin-btn-${d.id}`}
-                      >
-                        <Edit2 size={13} /> Edit PIN
                       </Button>
                     </div>
                   </td>
@@ -273,38 +229,27 @@ export default function AdminDashboard() {
           </TabsContent>
 
           <TabsContent value="passengers" className="pt-4">
-            <TableWrap head={["Passenger", "Cell", "Email", "Default PIN", "Joined", "Actions"]}>
+            <TableWrap head={["Passenger", "Cell", "Email", "Joined", "Actions"]}>
               {(passengers.data || []).length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-500">No registered passengers found.</td></tr>
+                <tr><td colSpan={5} className="px-4 py-6 text-center text-slate-500">No registered passengers found.</td></tr>
               )}
               {(passengers.data || []).map((p) => (
                 <tr key={p.id} data-testid="admin-passenger-row" className="border-t border-[#263144]">
                   <td className="px-4 py-3 text-white font-medium">{p.full_name}</td>
                   <td className="px-4 py-3 font-mono text-slate-300">{p.cell_phone || "—"}</td>
                   <td className="px-4 py-3 text-slate-300">{p.email || "—"}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-primary">{p.default_pin || (p.username === "lizwi lakhe" ? "246810" : "1234")}</td>
                   <td className="px-4 py-3 text-xs text-slate-400">{(p.created_at || "").slice(0, 10)}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1">
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => openResetModal({ ...p, role: "passenger", default_pin: p.default_pin || (p.username === "lizwi lakhe" ? "246810" : "1234") })}
+                        onClick={() => openResetModal({ ...p, role: "passenger" })}
                         className="h-8 px-2 text-amber-400 hover:bg-amber-400/10 gap-1 text-xs"
                         title="Reset to default passenger PIN"
                         data-testid={`reset-passenger-pin-btn-${p.id}`}
                       >
                         <RotateCcw size={13} /> Reset PIN
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => openEditModal({ ...p, role: "passenger" })}
-                        className="h-8 px-2 text-cyan-400 hover:bg-cyan-400/10 gap-1 text-xs"
-                        title="Edit passenger PIN"
-                        data-testid={`edit-passenger-pin-btn-${p.id}`}
-                      >
-                        <Edit2 size={13} /> Edit PIN
                       </Button>
                       <Button
                         size="icon"
@@ -333,12 +278,12 @@ export default function AdminDashboard() {
                     Super Admin Credential Control <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px]">Siya Only</Badge>
                   </h3>
                   <p className="text-xs text-slate-300 mt-0.5">
-                    As Super Admin Siya, you have exclusive authority to reset and edit administrator passwords across the entire platform.
+                    As Super Admin Siya, you have exclusive authority to reset administrator passwords across the entire platform.
                   </p>
                 </div>
               </Card>
 
-              <TableWrap head={["Admin Name", "Email", "Status", "Default Password", "Actions"]}>
+              <TableWrap head={["Admin Name", "Email", "Status", "Actions"]}>
                 {(admins.data || []).map((a) => {
                   const targetIsSiya = a.email?.toLowerCase() === "siya@erank.co.za" || a.username?.toLowerCase() === "siya" || a.full_name?.toLowerCase() === "siya";
                   return (
@@ -359,28 +304,17 @@ export default function AdminDashboard() {
                           </Badge>
                         )}
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs text-primary">{a.default_pin || "erank2026"}</td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => openResetModal({ ...a, role: "admin", default_pin: a.default_pin || "erank2026" })}
+                            onClick={() => openResetModal({ ...a, role: "admin" })}
                             className="h-8 px-2 text-amber-400 hover:bg-amber-400/10 gap-1 text-xs"
                             title="Reset admin password to default (erank2026)"
                             data-testid={`reset-admin-pwd-btn-${a.id}`}
                           >
                             <RotateCcw size={13} /> Reset Password
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => openEditModal({ ...a, role: "admin" })}
-                            className="h-8 px-2 text-cyan-400 hover:bg-cyan-400/10 gap-1 text-xs"
-                            title="Edit admin password"
-                            data-testid={`edit-admin-pwd-btn-${a.id}`}
-                          >
-                            <Edit2 size={13} /> Edit Password
                           </Button>
                           {!targetIsSiya && (
                             <Button
@@ -483,14 +417,8 @@ export default function AdminDashboard() {
               <strong className="text-white">{resetTarget?.full_name}</strong>{" "}
               (<span className="capitalize text-primary">{resetTarget?.role}</span>)?
             </p>
-            <div className="p-3 bg-[#0A0D14] border border-[#263144] rounded-lg space-y-1">
-              <div className="text-xs text-slate-400">1st Default PIN / Password:</div>
-              <div className="text-lg font-mono font-bold text-primary">
-                {resetTarget?.default_pin || (resetTarget?.role === "admin" ? "erank2026" : resetTarget?.role === "marshal" ? "123456789" : resetTarget?.role === "driver" ? "12345678" : "123456")}
-              </div>
-            </div>
             <p className="text-xs text-slate-400">
-              The user's password/PIN will immediately revert to this default.
+              The user's password/PIN will immediately revert to the platform default.
             </p>
           </div>
           <DialogFooter className="flex gap-2">
@@ -503,55 +431,6 @@ export default function AdminDashboard() {
               className="bg-amber-500 hover:bg-amber-600 text-black font-bold gap-1.5"
             >
               <RotateCcw size={14} /> {resetting ? "Resetting..." : "Confirm Reset"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit PIN / Password Dialog */}
-      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
-        <DialogContent className="bg-[#181F2C] border-[#263144] text-white max-w-md">
-          <DialogHeader>
-            <div className="h-11 w-11 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center mb-2 mx-auto">
-              <KeyRound size={22} />
-            </div>
-            <DialogTitle className="text-center text-lg font-bold font-heading">
-              Edit PIN / Password
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2 text-sm text-slate-300">
-            <p>
-              Set a new custom PIN / password for{" "}
-              <strong className="text-white">{editTarget?.full_name}</strong>{" "}
-              (<span className="capitalize text-primary">{editTarget?.role}</span>).
-            </p>
-            <div className="space-y-1">
-              <Label className="text-xs text-slate-400">New PIN or Password (min 4 characters) *</Label>
-              <Input
-                type="text"
-                value={newSecret}
-                onChange={(e) => setNewSecret(e.target.value)}
-                placeholder="Enter new PIN or password..."
-                className="bg-[#0A0D14] border-[#263144] text-white h-10 font-mono"
-                autoFocus
-              />
-            </div>
-            {editTarget?.default_pin && (
-              <p className="text-xs text-slate-500">
-                Original default PIN: <span className="font-mono text-slate-400">{editTarget.default_pin}</span>
-              </p>
-            )}
-          </div>
-          <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => setEditModalOpen(false)} className="border-[#334155] text-slate-300">
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveSecret}
-              disabled={savingSecret || !newSecret.trim()}
-              className="bg-primary hover:bg-primary/90 text-black font-bold gap-1.5"
-            >
-              <Check size={14} /> {savingSecret ? "Saving..." : "Save PIN / Password"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -602,16 +481,15 @@ function TableWrap({ head, children }) {
   );
 }
 
-function UserTable({ users, onDelete, onReset, onEdit, showEmail, testid }) {
+function UserTable({ users, onDelete, onReset, showEmail, testid }) {
   return (
-    <TableWrap head={showEmail ? ["Name", "Email", "Cell", "Rank", "Default PIN", "Actions"] : ["Name", "Cell", "Rank", "Default PIN", "Actions"]}>
+    <TableWrap head={showEmail ? ["Name", "Email", "Cell", "Rank", "Actions"] : ["Name", "Cell", "Rank", "Actions"]}>
       {(users || []).map((u) => (
         <tr key={u.id} data-testid={testid} className="border-t border-[#263144]">
           <td className="px-4 py-3 text-white font-medium">{u.full_name}</td>
           {showEmail && <td className="px-4 py-3 text-slate-300">{u.email}</td>}
           <td className="px-4 py-3 font-mono text-slate-300">{u.cell_phone}</td>
           <td className="px-4 py-3 text-slate-300">{u.rank_name}</td>
-          <td className="px-4 py-3 font-mono text-xs text-primary">{u.default_pin || (u.role === "marshal" ? "123456789" : "123456")}</td>
           <td className="px-4 py-3 text-right whitespace-nowrap">
             <div className="flex items-center justify-end gap-1">
               {onReset && (
@@ -624,18 +502,6 @@ function UserTable({ users, onDelete, onReset, onEdit, showEmail, testid }) {
                   data-testid={`reset-pin-btn-${u.id}`}
                 >
                   <RotateCcw size={13} /> Reset PIN
-                </Button>
-              )}
-              {onEdit && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => onEdit(u)}
-                  className="h-8 px-2 text-cyan-400 hover:bg-cyan-400/10 gap-1 text-xs"
-                  title="Edit / change PIN or password"
-                  data-testid={`edit-pin-btn-${u.id}`}
-                >
-                  <Edit2 size={13} /> Edit PIN
                 </Button>
               )}
               {onDelete && (
