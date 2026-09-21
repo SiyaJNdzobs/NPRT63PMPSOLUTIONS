@@ -131,7 +131,6 @@ export default function SignIn() {
                     disabled={!role}
                     data-testid="login-identifier-input"
                     className="mt-1 h-11 bg-[#0A0D14] border-[#263144] text-white"
-                    placeholder={isAdmin ? "you@erank.co.za" : "Your full name"}
                   />
                 </div>
                 <div>
@@ -143,7 +142,6 @@ export default function SignIn() {
                     disabled={!role}
                     data-testid="login-secret-input"
                     className="mt-1 h-11 bg-[#0A0D14] border-[#263144] text-white"
-                    placeholder={isAdmin ? "Password" : "PIN"}
                   />
                 </div>
                 <Button type="submit" disabled={busy || !role} data-testid="login-submit-btn" className="w-full h-11 bg-primary text-black hover:bg-primary/90">
