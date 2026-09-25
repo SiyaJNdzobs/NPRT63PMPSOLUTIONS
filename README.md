@@ -195,7 +195,7 @@ erank/
 └── README.md
 ```
 
-*(Adjust the tree to match your actual repository layout.)*
+
 
 ---
 
@@ -309,7 +309,7 @@ These cover all endpoints, request/response schemas, and authentication requirem
 
 ## Testing
 
-*(Update this section to reflect your actual test setup.)*
+### Automated Tests
 
 - **Backend:** `pytest` for API and unit tests
   ```bash
@@ -329,11 +329,24 @@ These cover all endpoints, request/response schemas, and authentication requirem
 - Revenue calculation (local vs long-distance)
 - Manifest creation and next-of-kin capture
 
+### End-to-End Test Cases
+
+| Test Case ID | Test Case | Expected Result | Result | Comments |
+| :----------- | :-------- | :-------------- | :----- | :------- |
+| TC-E001 | Admin creates owner → owner adds taxi → driver is assigned | All records are correctly linked | | |
+| TC-E002 | Driver scans rank QR → joins queue → presses DEPART | Taxi leaves queue, operation is created, and revenue is recorded | | |
+| TC-E003 | Marshal searches taxi → adds it to queue → presses DEPART | Correct taxi is queued, departed, and recorded | | |
+| TC-E004 | Taxi departs → revenue is calculated → owner views revenue | Owner sees the correct updated revenue | | |
+| TC-E005 | Marshal posts rank update → passenger opens public page | Passenger can see the published update | | |
+| TC-E006 | Passenger searches taxi → views driver/route → shares details | Correct taxi information is available for sharing | | |
+| TC-E007 | Driver sends SOS → owner receives email | Correct emergency information reaches the correct owner | | |
+| TC-E008 | Long-distance taxi → passenger captured → taxi departs → SOS sent | Passenger, next-of-kin, and operation information remain correctly linked | | |
+
 ---
 
 ## Screenshots
 
-> Add screenshots here for maximum impact. Suggested images:
+> N.B Still To Add Screenshots
 
 | Screen                          | Description                                      |
 | :------------------------------ | :----------------------------------------------- |
