@@ -18,7 +18,7 @@
 **Lecturer:** Mr Melvin
 **Submission Date:** 01 October 2026
 
-**Live Application:** [https://erank.onrender.com](https://erank.onrender.com)
+**Live Application:** [eRank](https://erank.onrender.com)
 
 ---
 
