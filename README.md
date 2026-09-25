@@ -20,28 +20,8 @@
 
 **Live Application:** [https://erank.onrender.com](https://erank.onrender.com)
 
-> ⚠️ *Hosted on Render's free tier — the first load may take up to ~30 seconds while the service spins up.*
-
 ---
 
-## Table of Contents
-
-1. [Development Team](#development-team)
-2. [Overview](#overview)
-3. [User Roles & Permissions](#user-roles--permissions)
-4. [Tech Stack & Architecture](#tech-stack--architecture)
-5. [Security & Protection](#security--protection)
-6. [End-to-End Use Case Scenario](#e-rank-end-to-end-use-case-scenario)
-7. [Project Structure](#project-structure)
-8. [Setup & Running Locally](#setup--running-locally)
-9. [Environment Variables](#environment-variables)
-10. [API Documentation](#api-documentation)
-11. [Testing](#testing)
-12. [Screenshots](#screenshots)
-13. [Known Limitations & Future Work](#known-limitations--future-work)
-14. [License & Acknowledgements](#license--acknowledgements)
-
----
 
 ## Development Team
 
@@ -61,7 +41,7 @@
 
 ### Core Features by Role
 
-**👤 Passenger**
+** Passenger**
 - Search routes and fares
 - View public taxi and rank information
 - Board taxis and complete a digital manifest with next-of-kin details
@@ -69,55 +49,33 @@
 - Opt in/out of location sharing
 - Chat with the multilingual AI Assistant (routes, fares, ranks)
 
-**🧑‍✈️ Driver**
+** Driver**
 - Scan the rank QR code to join the queue (GPS geo-verified)
 - Trigger SOS alerts with live location
 - Scan the destination rank's QR to join the return queue (long-distance)
 - View assigned taxi and trip history
 
-**🛡️ Marshal**
+** Marshal**
 - Display rank QR code for driver check-ins
 - Publish real-time rank updates
 - Manage the 20-metre GPS geofence
 - Capture passenger details for those without smartphones
 - Press **Depart** to close a trip and trigger revenue calculation
 
-**🚐 Owner**
+** Owner**
 - Register local and long-distance taxis
 - Assign drivers to taxis
 - Configure routes and fares
 - View revenue reports and export to Excel (`.xlsx`)
 
-**⚙️ Admin**
+** Admin**
 - Create and manage Owner accounts
 - Oversee platform operations
 - Manage users, ranks, and system configuration
 
 ---
 
-## User Roles & Permissions
 
-| Capability                        | Admin | Owner | Marshal | Driver | Passenger |
-| :-------------------------------- | :---: | :---: | :-----: | :----: | :-------: |
-| Create Owner accounts             |  ✅   |  ❌   |   ❌    |   ❌   |    ❌     |
-| Register taxis                    |  ❌   |  ✅   |   ❌    |   ❌   |    ❌     |
-| Assign drivers                    |  ❌   |  ✅   |   ❌    |   ❌   |    ❌     |
-| Configure routes & fares          |  ❌   |  ✅   |   ❌    |   ❌   |    ❌     |
-| Export revenue (Excel)            |  ❌   |  ✅   |   ❌    |   ❌   |    ❌     |
-| Display rank QR                   |  ❌   |  ❌   |   ✅    |   ❌   |    ❌     |
-| Manage GPS geofence               |  ❌   |  ❌   |   ✅    |   ❌   |    ❌     |
-| Publish rank updates              |  ❌   |  ❌   |   ✅    |   ❌   |    ❌     |
-| Capture offline passenger details |  ❌   |  ❌   |   ✅    |   ❌   |    ❌     |
-| Depart a trip                     |  ❌   |  ❌   |   ✅    |   ❌   |    ❌     |
-| Join queue (QR scan)              |  ❌   |  ❌   |   ❌    |   ✅   |    ❌     |
-| Trigger SOS                       |  ❌   |  ❌   |   ❌    |   ✅   |    ❌     |
-| Join return queue                 |  ❌   |  ❌   |   ❌    |   ✅   |    ❌     |
-| Search routes & fares             |  ✅   |  ✅   |   ✅    |   ✅   |    ✅     |
-| Submit digital manifest           |  ❌   |  ❌   |   ❌    |   ❌   |    ✅     |
-| Share live location               |  ❌   |  ❌   |   ❌    |   ✅   |    ✅     |
-| Use AI Assistant                  |  ✅   |  ✅   |   ✅    |   ✅   |    ✅     |
-
----
 
 ## Tech Stack & Architecture
 
@@ -163,208 +121,7 @@ During the journey, the Driver can trigger an **SOS** alert containing live loca
 
 ---
 
-## Project Structure
 
-```
-erank/
-├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI entry point
-│   │   ├── models/              # Pydantic & DB models
-│   │   ├── routes/              # API route handlers (auth, queues, trips, etc.)
-│   │   ├── services/            # Business logic (geo-fencing, revenue, AI assistant)
-│   │   ├── auth/                # JWT, bcrypt, RBAC dependencies
-│   │   └── db/                  # MongoDB Motor client & collections
-│   ├── requirements.txt
-│   └── .env.example
-│
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── components/          # Reusable UI (shadcn/ui + custom)
-│   │   ├── pages/               # Role dashboards (Admin, Owner, Marshal, Driver, Passenger)
-│   │   ├── hooks/               # Custom hooks (auth, geolocation, QR)
-│   │   ├── services/            # API client
-│   │   ├── context/             # Auth & role context
-│   │   └── App.js
-│   ├── package.json
-│   ├── craco.config.js
-│   └── .env.example
-│
-├── docs/                        # Screenshots, diagrams
-└── README.md
-```
-
-
-
----
-
-## Setup & Running Locally
-
-### Prerequisites
-
-- **Node.js** v18+ and npm
-- **Python** 3.11+
-- **MongoDB Atlas** account (or local MongoDB instance)
-- **Google Maps API key** (Maps JavaScript API + Geolocation enabled)
-- **Git**
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/<your-org>/erank.git
-cd erank
-```
-
-### 2. Backend setup
-
-```bash
-cd backend
-python -m venv venv
-
-# Windows
-venv\Scripts\activate
-# macOS/Linux
-source venv/bin/activate
-
-pip install -r requirements.txt
-```
-
-Create a `.env` file in `backend/` (see [Environment Variables](#environment-variables)), then run:
-
-```bash
-uvicorn app.main:app --reload --port 8000
-```
-
-Backend will be available at `http://localhost:8000`.
-
-### 3. Frontend setup
-
-```bash
-cd ../frontend
-npm install
-```
-
-Create a `.env` file in `frontend/`, then run:
-
-```bash
-npm start
-```
-
-Frontend will be available at `http://localhost:3000`.
-
-### 4. First-time login
-
-- The **Admin** account is seeded on first backend startup (or via a seed script).
-- Owners created by the Admin receive temporary credentials and **must reset their password/PIN on first login**.
-- See `backend/scripts/seed_admin.py` (or equivalent) for default admin credentials.
-
----
-
-## Environment Variables
-
-### Backend (`backend/.env`)
-
-| Variable               | Description                                     | Example                              |
-| :--------------------- | :---------------------------------------------- | :----------------------------------- |
-| `MONGO_URI`            | MongoDB Atlas connection string                 | `mongodb+srv://user:pass@cluster/...` |
-| `MONGO_DB_NAME`        | Database name                                   | `erank`                              |
-| `JWT_SECRET`           | Secret key for signing JWTs                     | `a-long-random-string`               |
-| `JWT_ALGORITHM`        | JWT signing algorithm                           | `HS256`                              |
-| `JWT_EXPIRE_MINUTES`   | Token lifetime in minutes                       | `60`                                 |
-| `GOOGLE_MAPS_API_KEY`  | Server-side Maps key (if used)                  | `AIza...`                            |
-| `AI_ASSISTANT_API_KEY` | Key for the AI Assistant provider (if external) | `sk-...`                             |
-
-### Frontend (`frontend/.env`)
-
-| Variable                  | Description                     | Example                          |
-| :------------------------ | :------------------------------ | :------------------------------- |
-| `REACT_APP_API_URL`       | Base URL of the backend API     | `http://localhost:8000`          |
-| `REACT_APP_GOOGLE_MAPS_KEY` | Google Maps JS API key        | `AIza...`                        |
-
-> 🔒 **Never commit `.env` files.** Use `.env.example` with placeholders in the repo.
-
----
-
-## API Documentation
-
-FastAPI automatically generates interactive API documentation:
-
-- **Swagger UI:** `http://localhost:8000/docs` (or `https://erank.onrender.com/docs`)
-- **ReDoc:** `http://localhost:8000/redoc`
-
-These cover all endpoints, request/response schemas, and authentication requirements.
-
-**Main endpoint groups:**
-
-- `/auth` — login, token refresh, first-login credential reset
-- `/admin` — owner account management
-- `/owners` — taxis, drivers, routes, fares, revenue reports
-- `/marshal` — rank QR, updates, geofence, depart trip, offline passenger capture
-- `/driver` — join queue, return queue, SOS
-- `/passenger` — route search, manifests, live location sharing
-- `/assistant` — AI Assistant (routes, fares, ranks)
-
----
-
-## Testing
-
-### Automated Tests
-
-- **Backend:** `pytest` for API and unit tests
-  ```bash
-  cd backend
-  pytest
-  ```
-- **Frontend:** React Testing Library
-  ```bash
-  cd frontend
-  npm test
-  ```
-
-**Tested areas include:**
-- Authentication and RBAC enforcement
-- Duplicate queue prevention
-- GPS geo-fencing (20 m radius validation)
-- Revenue calculation (local vs long-distance)
-- Manifest creation and next-of-kin capture
-
-### End-to-End Test Cases
-
-| Test Case ID | Test Case | Expected Result | Result | Comments |
-| :----------- | :-------- | :-------------- | :----- | :------- |
-| TC-E001 | Admin creates owner → owner adds taxi → driver is assigned | All records are correctly linked | | |
-| TC-E002 | Driver scans rank QR → joins queue → presses DEPART | Taxi leaves queue, operation is created, and revenue is recorded | | |
-| TC-E003 | Marshal searches taxi → adds it to queue → presses DEPART | Correct taxi is queued, departed, and recorded | | |
-| TC-E004 | Taxi departs → revenue is calculated → owner views revenue | Owner sees the correct updated revenue | | |
-| TC-E005 | Marshal posts rank update → passenger opens public page | Passenger can see the published update | | |
-| TC-E006 | Passenger searches taxi → views driver/route → shares details | Correct taxi information is available for sharing | | |
-| TC-E007 | Driver sends SOS → owner receives email | Correct emergency information reaches the correct owner | | |
-| TC-E008 | Long-distance taxi → passenger captured → taxi departs → SOS sent | Passenger, next-of-kin, and operation information remain correctly linked | | |
-
----
-
-## Screenshots
-
-> N.B Still To Add Screenshots
-
-| Screen                          | Description                                      |
-| :------------------------------ | :----------------------------------------------- |
-| `docs/login.png`                | Login / first-time credential reset              |
-| `docs/admin-dashboard.png`      | Admin — owner account management                 |
-| `docs/owner-dashboard.png`      | Owner — taxis, drivers, routes, revenue          |
-| `docs/marshal-qr.png`           | Marshal — QR display and rank updates            |
-| `docs/driver-queue.png`         | Driver — QR check-in and queue status            |
-| `docs/passenger-manifest.png`   | Passenger — digital manifest + next-of-kin       |
-| `docs/ai-assistant.png`         | Multilingual AI Assistant with voice input       |
-| `docs/sos-alert.png`            | Driver SOS alert with live location              |
-
-```markdown
-![Admin Dashboard](docs/admin-dashboard.png)
-![Marshal QR](docs/marshal-qr.png)
-```
-
----
 
 ## Known Limitations & Future Work
 
@@ -373,7 +130,7 @@ These cover all endpoints, request/response schemas, and authentication requirem
 - Web-based (PWA) rather than a native mobile app
 - Revenue is *tracked*, not *collected* — no payment integration yet
 - Passengers without smartphones rely on the Marshal for manifest capture
-- No SMS fallback for passengers without data
+- No SMS fallback for passengers without data this is not implemented because it needs to be payed for but it is under consideration
 
 **Planned Enhancements**
 - Offline-first mode with background sync
@@ -398,4 +155,4 @@ These cover all endpoints, request/response schemas, and authentication requirem
 
 ---
 
-*Built with ❤️ by **PMP Solutions** — NPRT630, Sol Plaatje University.*
+*Built with  by **PMP Solutions** — NPRT630, Sol Plaatje University.*
