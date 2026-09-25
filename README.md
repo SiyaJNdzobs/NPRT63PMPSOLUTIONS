@@ -41,7 +41,7 @@
 
 ### Core Features by Role
 
-** Passenger**
+Passenger
 - Search routes and fares
 - View public taxi and rank information
 - Board taxis and complete a digital manifest with next-of-kin details
@@ -49,26 +49,26 @@
 - Opt in/out of location sharing
 - Chat with the multilingual AI Assistant (routes, fares, ranks)
 
-** Driver**
+Driver
 - Scan the rank QR code to join the queue (GPS geo-verified)
 - Trigger SOS alerts with live location
 - Scan the destination rank's QR to join the return queue (long-distance)
 - View assigned taxi and trip history
 
-** Marshal**
+Marshal
 - Display rank QR code for driver check-ins
 - Publish real-time rank updates
 - Manage the 20-metre GPS geofence
 - Capture passenger details for those without smartphones
 - Press **Depart** to close a trip and trigger revenue calculation
 
-** Owner**
+*Owner
 - Register local and long-distance taxis
 - Assign drivers to taxis
 - Configure routes and fares
 - View revenue reports and export to Excel (`.xlsx`)
 
-** Admin**
+Admin
 - Create and manage Owner accounts
 - Oversee platform operations
 - Manage users, ranks, and system configuration
@@ -121,8 +121,6 @@ During the journey, the Driver can trigger an **SOS** alert containing live loca
 
 ---
 
-
-
 ## Known Limitations & Future Work
 
 **Current Limitations**
@@ -155,4 +153,4 @@ During the journey, the Driver can trigger an **SOS** alert containing live loca
 
 ---
 
-*Built with  by **PMP Solutions** — NPRT630, Sol Plaatje University.*
+*Built by **PMP Solutions** — NPRT630, Sol Plaatje University.*
