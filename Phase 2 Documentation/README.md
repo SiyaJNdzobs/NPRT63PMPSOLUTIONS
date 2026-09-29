@@ -211,26 +211,26 @@ Phase 2 bridges the conceptual proposal of E-RANK with concrete software enginee
 ### 5.1 Use Case Diagram
 ```mermaid
 flowchart LR
-    subgraph Actors
-        P[Passenger]
-        D[Driver]
-        M[Marshal]
-        O[Owner]
-        A[Admin]
+    subgraph Actors ["System Actors"]
+        P["Passenger"]
+        D["Driver"]
+        M["Marshal"]
+        O["Owner"]
+        A["Admin"]
     end
 
-    subgraph "E-RANK System Boundary"
-        UC1[Search Routes & Fares]
-        UC2[Board Taxi & Complete Manifest]
-        UC3[Share Live Journey with Kin]
-        UC4[Scan Rank QR & Join Queue]
-        UC5[Trigger SOS Emergency]
-        UC6[Manage Live Queue & Skip with Reason]
-        UC7[Register Offline Passengers]
-        UC8[Authorize Taxi Departure]
-        UC9[Manage Fleet & Assign Drivers]
-        UC10[View Revenue & Export Excel]
-        UC11[Create Owner Accounts & Audit Logs]
+    subgraph SystemBoundary ["E-RANK System Boundary"]
+        UC1["Search Routes and Fares"]
+        UC2["Board Taxi and Complete Manifest"]
+        UC3["Share Live Journey with Kin"]
+        UC4["Scan Rank QR and Join Queue"]
+        UC5["Trigger SOS Emergency"]
+        UC6["Manage Live Queue and Skip"]
+        UC7["Register Offline Passengers"]
+        UC8["Authorize Taxi Departure"]
+        UC9["Manage Fleet and Assign Drivers"]
+        UC10["View Revenue and Export Excel"]
+        UC11["Create Owner Accounts and Audit Logs"]
     end
 
     P --> UC1
@@ -249,14 +249,24 @@ flowchart LR
 ### 5.2 Context Diagram
 ```mermaid
 flowchart TD
-    GMS[Google Maps API / GPS] <-->|Coordinates & Distance Matrix| ERANK((E-RANK Core Platform))
-    WAS[WhatsApp / SMS Gateway] <--|Tracking Links & Alerts| ERANK
+    GMS["Google Maps API and GPS"] -->|"Coordinates and Maps"| ERANK(("E-RANK Platform"))
+    ERANK -->|"Map Telemetry"| GMS
+    ERANK -->|"SMS and WhatsApp Alerts"| WAS["WhatsApp and SMS Gateway"]
     
-    COMM[Commuters & Passengers] <-->|Public Search & Manifests| ERANK
-    DRIV[Taxi Drivers] <-->|QR Check-ins & SOS| ERANK
-    MARS[Rank Marshals] <-->|Queue Control & Dispatch| ERANK
-    OWNR[Fleet Owners] <-->|Revenue Statements & Fleet| ERANK
-    ADMN[System Administrators] <-->|Platform Governance & Security| ERANK
+    COMM["Commuters and Passengers"] -->|"Search and Manifests"| ERANK
+    ERANK -->|"Trip Status"| COMM
+
+    DRIV["Taxi Drivers"] -->|"QR Check-in and SOS"| ERANK
+    ERANK -->|"Queue Position"| DRIV
+
+    MARS["Rank Marshals"] -->|"Queue Control and Dispatch"| ERANK
+    ERANK -->|"Live Rank Board"| MARS
+
+    OWNR["Fleet Owners"] -->|"Fleet Management"| ERANK
+    ERANK -->|"Revenue Statements"| OWNR
+
+    ADMN["System Administrators"] -->|"Governance and Security"| ERANK
+    ERANK -->|"System Logs"| ADMN
 ```
 
 ### 5.3 Driver State Machine Diagram
@@ -265,12 +275,12 @@ stateDiagram-v2
     [*] --> Idle: Driver logged in
     Idle --> InQueue: Scans QR within 20m Geofence
     InQueue --> Skipped: Marshal skips with mandatory reason
-    Skipped --> InQueue: Acknowledges skip / advances
+    Skipped --> InQueue: Acknowledges skip or advances
     InQueue --> Loading: Promoted to Bay 1
     Loading --> InTransit: Marshal clicks Depart
     InTransit --> Emergency: Driver triggers SOS
-    Emergency --> InTransit: Alert resolved by Owner/Police
-    InTransit --> Completed: Destination reached & confirmed
+    Emergency --> InTransit: Alert resolved by Owner or Police
+    InTransit --> Completed: Destination reached and confirmed
     Completed --> Idle: Re-enters idle pool
 ```
 
@@ -290,15 +300,15 @@ sequenceDiagram
         Marshal->>Frontend: Enters Name, Cell, ID, Kin details
         Frontend->>Backend: POST /marshal/passengers
     else Self-Service QR
-        Passenger->>Frontend: Scans Taxi QR & enters details
+        Passenger->>Frontend: Scans Taxi QR and enters details
         Frontend->>Backend: POST /passenger/board
     end
-    Backend->>Backend: Validate phone numbers & active vehicle capacity
+    Backend->>Backend: Validate phone numbers and active vehicle capacity
     Backend->>DB: Insert passenger document into manifest
-    DB-->>Backend: Return Confirmation & Tracking Token
-    Backend-->>Frontend: Return 201 Created & Seat Number
+    DB-->>Backend: Return Confirmation and Tracking Token
+    Backend-->>Frontend: Return 201 Created and Seat Number
     Frontend-->>Passenger: Render Boarding Card
-    Backend-)Kin: Dispatch WhatsApp/SMS Tracking Link
+    Backend-)Kin: Dispatch WhatsApp or SMS Tracking Link
     Kin->>Frontend: Open Tracking URL to monitor live journey
 ```
 
@@ -363,13 +373,8 @@ classDiagram
         +Int seat_number
     }
 
-    User <|-- Driver
-    User <|-- Marshal
-    User <|-- Owner
-    User <|-- Admin
-    Owner "1" --> "*" Taxi : owns
-    Taxi "1" --> "1" Driver : assigned to
-    Rank "1" --> "*" QueueEntry : holds
+    User "1" --> "*" Taxi : owns or drives
+    Rank "1" --> "*" QueueEntry : hosts
     QueueEntry "*" --> "1" Taxi : references
     TripManifest "1" --> "*" PassengerRecord : contains
     TripManifest "1" --> "1" Taxi : associated with
