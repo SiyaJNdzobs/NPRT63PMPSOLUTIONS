@@ -403,19 +403,19 @@ classDiagram
     ├── 1.4.4 Automated Testing (Pytest & Jest Suites)
     └── 1.4.5 Cloud Deployment to Render & Production Handover
 ```
-
+,  Phuti Setati 
 ---
 
 ## 7. Project Timeline & Gantt Chart
 
 | WBS ID | Task Name | Start Date | End Date | Dependencies | Assigned Lead |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1.1** | Phase 1: Problem Definition & Research | 13 Feb 2026 | 13 Mar 2026 | None | Siyabonga Ndzobondzobo |
+| **1.1** | Phase 1: Problem Definition & Research | 13 Feb 2026 | 13 Mar 2026 | None | Louisa Mdluli & Kholofelo Phalakatsela |
 | **1.2** | Phase 2: Requirements & UML Modelling | 14 Mar 2026 | 20 Apr 2026 | 1.1 | Oarabetse Morata |
-| **1.3** | Phase 3: UI Prototyping & Database Design | 21 Apr 2026 | 25 May 2026 | 1.2 | Phuti Setati |
-| **1.4.1**| Backend REST API Development | 26 May 2026 | 10 Jul 2026 | 1.3 | Kholofelo Phalakatsela |
-| **1.4.2**| Frontend React Implementation | 10 Jun 2026 | 30 Jul 2026 | 1.3 | Louisa Mdluli |
-| **1.4.3**| System Integration & Geofence Engine | 01 Aug 2026 | 20 Aug 2026 | 1.4.1, 1.4.2 | Siyabonga Ndzobondzobo |
+| **1.3** | Phase 3: UI Prototyping & Database Design | 21 Apr 2026 | 25 May 2026 | 1.2 | Phuti Setati  & Siyabonga José Ndzobondzobo |
+| **1.4.1**| Backend REST API Development | 26 May 2026 | 10 Jul 2026 | 1.3 | Siyabonga José Ndzobondzobo |
+| **1.4.2**| Frontend React Implementation | 10 Jun 2026 | 30 Jul 2026 | 1.3 |  Siyabonga José Ndzobondzobo |
+| **1.4.3**| System Integration & Geofence Engine | 01 Aug 2026 | 20 Aug 2026 | 1.4.1, 1.4.2 | Kholofelo Phalakatsela|
 | **1.4.4**| Field Usability & Automated Testing | 21 Aug 2026 | 15 Sep 2026 | 1.4.3 | Entire Team |
 | **1.4.5**| Phase 4 Final Submission & Demo Video | 16 Sep 2026 | 01 Oct 2026 | 1.4.4 | Entire Team |
 
