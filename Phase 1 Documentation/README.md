@@ -9,7 +9,7 @@
 **Group Name:** PMP Solutions  
 **Due Date:** 13 March 2026  
 **Repository:** [https://github.com/SiyaJNdzobs/NPRT63PMPSOLUTIONS/tree/main](https://github.com/SiyaJNdzobs/NPRT63PMPSOLUTIONS/tree/main)  
-**Live Application:** [eRank App on Render](https://erank.onrender.com)
+**Live Application:** [eRank App](https://erank.onrender.com)
 
 ---
 
