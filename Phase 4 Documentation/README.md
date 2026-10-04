@@ -35,7 +35,7 @@
    - 3.4 Live Journey Location Sharing (Bolt-Style Tracking)
    - 3.5 Automated Revenue Engine & Executive Excel (.xlsx) Export
    - 3.6 Emergency SOS Telemetry Broadcast
-   - 3.7 Conversational Multilingual AI Assistant
+   - 3.7 Real-Time Rank Updates & Operational Announcements
    - 3.8 Marshal Queue Skipping & In-App Driver Alerts
 4. [Source Code Quality & Security Architecture](#4-source-code-quality--security-architecture)
 5. [Verification & Comprehensive Testing](#5-verification--comprehensive-testing)
@@ -70,8 +70,8 @@ The following table documents the complete developmental journey of E-RANK, deta
 | **Kin Safety & Location Tracking** | General idea of SMS alerts on departure. | Formulated SMS departure notification IPO specification. | Conceptualized passenger route cards with emergency contact linkage. | Built live Bolt-style journey sharing with tokenized URL & "See Location on Google Maps" button. | SMS provides static text only; a real-time web link allows anxious families to watch the taxi travel across provinces on Google Maps. |
 | **Revenue & Financial Accounting** | Stated that owners need trip counts and visibility. | Defined IPO model for fare calculation (`Pax Count × Route Tariff`). | Designed owner revenue overview cards with static mock-up totals. | Built real-time revenue engine with downloadable, formatted executive `.xlsx` statement (OpenPyXL). | Owners demanded formal, auditable accounting spreadsheets compatible with Excel, not just basic on-screen numbers. |
 | **User Interface & Theme** | Conceptual UI proposal with standard light design. | Formulated wireframe specifications and screen flowcharts. | Evaluated in usability lab (Moroka 112). Contrast scored 3/10; failed WCAG outdoor sunlight test. | Overhauled to high-contrast Dark Navy (`#0A0D14`, `#181F2C`, `#10B981`) achieving 18.2:1 contrast ratio. | Extreme outdoor daylight and glare at taxi ranks caused visual washout on light themes. Dark Navy ensures instant glanceability. |
-| **Database Architecture** | Undecided between relational SQL and cloud datastores. | Formulated relational entities and preliminary relational schemas. | Evaluated SQL vs NoSQL; selected MongoDB Atlas for flexible manifest documents. | Implemented production MongoDB Atlas with indexed collections and geospatial coordinates. | minicab manifests have variable passenger arrays (15-22 seats); document NoSQL avoided complex multi-table relational joins during rapid boarding. |
-| **Commuter Communication & Inclusivity** | Assumed standard English interface. | Specified English search screens and public routes. | User feedback noted language barrier for elderly commuters and non-English drivers. | Integrated 11 South African official languages greeting banner and multilingual conversational AI assistant. | Builds grass-roots trust and enables commuters who speak isiZulu, isiXhosa, Sesotho, Setswana, or Afrikaans to query fares naturally. |
+| **Database Architecture** | Undecided between relational SQL and cloud datastores. | Formulated relational entities and preliminary relational schemas. | Evaluated SQL vs NoSQL; selected MongoDB Atlas for flexible manifest documents. | Implemented production MongoDB Atlas with indexed collections and geospatial coordinates. | Minibus manifests have variable passenger arrays (15-22 seats); document NoSQL avoided complex multi-table relational joins during rapid boarding. |
+| **Public Route Discovery & Transparency** | Static noticeboard concept. | Formulated public search IPO without authentication requirement. | Designed simple search cards for ranks and fares. | Deployed universal public route and fare search with Google Maps directions & live rank updates. | Allows commuters to discover standardized rank fares, routes, and operational announcements without account creation or login friction. |
 
 ---
 
@@ -129,10 +129,10 @@ The production implementation of E-RANK employs a modular, decoupled architectur
 - In the event of an accident, mechanical breakdown, or criminal incident, the driver presses the red SOS button.
 - The system captures instantaneous GPS coordinates and dispatches an emergency alert containing driver details, vehicle registration, and the active passenger manifest to the owner.
 
-### 3.7 Conversational Multilingual AI Assistant
-- Integrated AI assistant answering queries regarding routes, fares, and rank procedures.
-- Fluent in South Africa's diverse languages including isiZulu, isiXhosa, Sesotho, Setswana, Afrikaans, and English.
-- Politely guides passengers to rank marshals if an unserviced destination is requested.
+### 3.7 Real-Time Rank Updates & Operational Announcements
+- Marshals publish real-time operational broadcasts (e.g. adverse weather warnings, route delays, road closures) directly from their dashboard.
+- Announcements appear immediately on the public landing page as alert cards without requiring commuter login.
+- Eliminates rank-wide confusion and provides proactive operational transparency during peak commuting hours.
 
 ### 3.8 Marshal Queue Skipping & In-App Driver Alerts
 - When an in-queue vehicle is absent or not roadworthy, the marshal can skip it back one position.
@@ -232,7 +232,7 @@ Taxi owners historically had to spend hours late at night mentally tallying scri
 - **Explicit Confirmation with `ResultModal`:** In high-distraction environments, users frequently wonder: *"Did my click actually save?"* If feedback is subtle, users double-click, submit duplicate records, or panic. We introduced prominent confirmation modals (`ResultModal`) featuring bold centered icons and a massive "OK" acknowledgment button, giving users definitive closure after every critical transaction.
 
 ### 7.3 What Surprised Us & What We Would Change
-- **What Surprised Us:** The sheer enthusiasm for indigenous languages. When commuters and rank staff saw greetings in isiXhosa (*Molweni*), isiZulu (*Sawubona*), Sesotho (*Dumelang*), and Sepedi (*Thobela*), their posture shifted immediately from skepticism to emotional ownership. Cultural recognition was our greatest tool for digital onboarding.
+- **What Surprised Us:** The rapid willingness of taxi drivers and marshals to embrace digital queue tracking once transparency was guaranteed. When drivers realized that the FIFO queue was mathematically locked and that skipped taxis required a mandatory explanation, skepticism evaporated and was replaced by genuine trust.
 - **What We Would Change Based on Retrospective Insight:** If we were to start from Phase 1 again, we would integrate USSD offline fallbacks even earlier in the architecture. While 90% of our test participants had smartphones, rank environments frequently experience dead cellular zones where a lightweight USSD or offline Bluetooth queue token mesh would provide even greater peace of mind.
 
 ---

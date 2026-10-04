@@ -114,7 +114,7 @@ Through qualitative field interviews conducted at Kimberley taxi ranks (such as 
 - **Marshal-Centric Queue Dispatch:** Marshals operate an intuitive tablet dashboard to check in drivers, enforce GPS geofenced queue integrity, and trigger departures.
 - **Digital Manifest & WhatsApp Kin Tracking:** Fast passenger registration with instantaneous cloud backup and WhatsApp live journey link dispatch.
 - **Owner Visibility & Revenue Analytics:** Automated trip tallying, revenue calculations, and branded Excel/PDF statement generation.
-- **Multilingual Commuter Portal:** Route finding, transparent fare calculation, live rank updates, and multilingual conversational AI.
+- **Public Commuter Discovery Portal:** Route finding, transparent fare calculation, live rank announcements, and direct Google Maps directions.
 
 ---
 
@@ -132,7 +132,7 @@ E-RANK incorporates twelve (12) concrete functionalities directly aligned with s
 9. **Emergency SOS Broadcast with Telemetry:** Drivers trigger a 1-tap SOS that immediately notifies owners via email/SMS with precise GPS coordinates and passenger rosters.
 10. **Public Route & Transparent Fare Lookup:** Open public portal enables passengers to search origin-to-destination pairs with official association fares.
 11. **Live Rank Announcements & Alert Broadcasts:** Marshals broadcast operational alerts (e.g., road closures, peak-hour delays, weather hazards) to public commuter screens.
-12. **Multilingual AI Commuter Assistant:** Built-in conversational agent providing answers in official South African languages (isiZulu, isiXhosa, Sesotho, Setswana, Afrikaans, English).
+12. **Role-Based Audit & Security Administration:** Secure admin control module for association fleet governance, owner credential management, and audit log tracking.
 
 ---
 
@@ -165,7 +165,7 @@ E-RANK incorporates twelve (12) concrete functionalities directly aligned with s
 | **Queue Disputes** | Verbal disputes on who arrived first | Timestamped, geo-verified FIFO digital queue board | **100% elimination** of unverified queue cutting disputes. |
 | **Revenue Accounting** | Hand-scribbled cash totals reconciled weekly | Real-time automated calculation on trip departure | **Zero mathematical errors**; 100% auditable digital records. |
 | **Emergency Kin Notification** | Relatives notified hours later after hospital search | 1-click WhatsApp journey link with live GPS tracker | **Instant peace-of-mind** for families across South Africa. |
-| **Language Inclusivity** | English-only static rank signs | Native language prompts in 11 official SA languages | High usability for non-English literate rank staff. |
+| **Operational Transparency** | Uncommunicated rank delays & word-of-mouth | Real-time live rank announcements broadcast to public portal | Commuters informed instantly of route changes or delays. |
 
 ---
 
