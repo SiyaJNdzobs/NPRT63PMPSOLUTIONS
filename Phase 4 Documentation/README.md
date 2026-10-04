@@ -4,8 +4,7 @@
 **Programme:** Diploma in Information and Communication Technology  
 **Institution:** Sol Plaatje University  
 **Module Code:** NPRT630  
-**Examiner:** Mr. Melvin Kisten and Dr Silas Verkijika
-
+**Examiner:** Mr. Melvin Kisten and Dr. Silas Verkijika  
 **Group Name:** PMP Solutions  
 **Submission Date:** 01 October 2026  
 **Repository:** [https://github.com/SiyaJNdzobs/NPRT63PMPSOLUTIONS/tree/main](https://github.com/SiyaJNdzobs/NPRT63PMPSOLUTIONS/tree/main)  
@@ -27,6 +26,7 @@
 
 ## Table of Contents
 1. [Executive Overview & System Status](#1-executive-overview--system-status)
+   - 1.1 Project Continuity: Progression Matrix from Phase 1 to Phase 4
 2. [Technology Stack & Architecture](#2-technology-stack--architecture)
 3. [Implemented Feature Specifications](#3-implemented-feature-specifications)
    - 3.1 Five Role-Based Portals & Dashboards
@@ -43,7 +43,7 @@
    - 5.2 Field End-to-End Test Matrix (T001–T009)
    - 5.3 Usability Testing Metrics (Task Times, Errors, Satisfaction)
 6. [System Demonstration Walkthrough](#6-system-demonstration-walkthrough)
-7. [Reflections on Designing for Human Beings](#7-reflections-on-designing-for-human-beings)
+7. [Reflections on Designing for Human Beings (Phases 1–4 Journey & Cognitive Load)](#7-reflections-on-designing-for-human-beings-phases-14-journey--cognitive-load)
 8. [Known Limitations & Future Enhancements](#8-known-limitations--future-enhancements)
 9. [Conclusion](#9-conclusion)
 10. [References](#10-references)
@@ -58,35 +58,41 @@ The platform fulfills 100% of the specifications established across Phase 1, Pha
 - Zero-installation mobile web application engineered for budget Android smartphones, tablets, and desktop workstations.
 - Complete operational digital transformation of the taxi rank: from geo-verified QR queue check-ins and passenger manifests to live journey WhatsApp links and automated Excel financial statements.
 
+### 1.1 Project Continuity: Progression Matrix from Phase 1 to Phase 4
+The following table documents the complete developmental journey of E-RANK, detailing what changed across each phase, how earlier assumptions were refined through real-world testing, and the concrete technical rationale behind every evolution:
+
+| Domain / Dimension | Phase 1: Problem Definition & Proposal | Phase 2: System Analysis & Design | Phase 3: Prototype & Data Design | Phase 4: Implementation & Deployment | Rationale: Why It Changed |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **System Scope & Role Architecture** | Proposed high-level concept focused primarily on the Marshal and Passenger. | Defined 4 roles: Marshal, Driver, Owner, Passenger with strict task mappings. | Added Admin role for fleet onboarding and system-wide security auditing. | Implemented 5 full role shells: Admin, Owner, Marshal, Driver, Passenger with RBAC guards. | User research revealed associations cannot function without an independent Admin tier to onboard owners and audit marshal actions. |
+| **Driver Check-in & Queue Dispatch** | Basic QR code scanning to register in queue. | Specified FIFO queue ordering with timestamped arrival records. | Designed camera scanner screen and mock-up board with queue numbers. | Integrated HTML5 camera scanner + manual fallback + 20m Haversine GPS geofence validation. | Field testing indicated drivers could scan printed QR codes off-site. The 20m geofence ensures physical rank presence before queuing. |
+| **Queue Skipping & Reordering** | Simple marshal reorder concept without formal audit controls. | Specified IPO for queue reordering (`promote`, `remove`). | Added UI button for skipping absent taxis. Usability testing revealed driver confusion. | Added mandatory skip reason modal with instant push notification to driver dashboard. | Drivers expressed anxiety and anger when skipped without explanation. Mandatory reasons eliminated queue confrontation. |
+| **Passenger Manifest & Safety** | Proposed replacing paper logbooks with digital forms. | Mapped full manifest data fields: Name, Phone, ID, Next-of-Kin. | Designed manifest entry forms. Heuristic testing revealed single-page cognitive overload. | Deployed two boarding paths: Marshal fast-entry (<40s) and Passenger self-boarding via plate search + WhatsApp kin tracking. | Long queues at loading bays caused bottlenecks. Allowing tech-savvy commuters to self-board cut marshal data-entry load by 60%. |
+| **Kin Safety & Location Tracking** | General idea of SMS alerts on departure. | Formulated SMS departure notification IPO specification. | Conceptualized passenger route cards with emergency contact linkage. | Built live Bolt-style journey sharing with tokenized URL & "See Location on Google Maps" button. | SMS provides static text only; a real-time web link allows anxious families to watch the taxi travel across provinces on Google Maps. |
+| **Revenue & Financial Accounting** | Stated that owners need trip counts and visibility. | Defined IPO model for fare calculation (`Pax Count × Route Tariff`). | Designed owner revenue overview cards with static mock-up totals. | Built real-time revenue engine with downloadable, formatted executive `.xlsx` statement (OpenPyXL). | Owners demanded formal, auditable accounting spreadsheets compatible with Excel, not just basic on-screen numbers. |
+| **User Interface & Theme** | Conceptual UI proposal with standard light design. | Formulated wireframe specifications and screen flowcharts. | Evaluated in usability lab (Moroka 112). Contrast scored 3/10; failed WCAG outdoor sunlight test. | Overhauled to high-contrast Dark Navy (`#0A0D14`, `#181F2C`, `#10B981`) achieving 18.2:1 contrast ratio. | Extreme outdoor daylight and glare at taxi ranks caused visual washout on light themes. Dark Navy ensures instant glanceability. |
+| **Database Architecture** | Undecided between relational SQL and cloud datastores. | Formulated relational entities and preliminary relational schemas. | Evaluated SQL vs NoSQL; selected MongoDB Atlas for flexible manifest documents. | Implemented production MongoDB Atlas with indexed collections and geospatial coordinates. | minicab manifests have variable passenger arrays (15-22 seats); document NoSQL avoided complex multi-table relational joins during rapid boarding. |
+| **Commuter Communication & Inclusivity** | Assumed standard English interface. | Specified English search screens and public routes. | User feedback noted language barrier for elderly commuters and non-English drivers. | Integrated 11 South African official languages greeting banner and multilingual conversational AI assistant. | Builds grass-roots trust and enables commuters who speak isiZulu, isiXhosa, Sesotho, Setswana, or Afrikaans to query fares naturally. |
+
 ---
 
 ## 2. Technology Stack & Architecture
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        FRONTEND PRESENTATION LAYER                     │
-│  React 18.2 • Tailwind CSS • Lucide Icons • shadcn/ui • Axios • Sonner │
-│  Responsive Viewports: Mobile (Drivers/Pax), Tablet (Rank Marshals)    │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ HTTPS / REST JSON API
-┌───────────────────────────────────▼────────────────────────────────────┐
-│                         BACKEND APPLICATION LAYER                      │
-│      FastAPI (Python 3.11) • Pydantic v2 • Uvicorn ASGI Server         │
-│  Modules: Auth & JWT, Queue Manager, Manifest Engine, SOS Alert Hub    │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ TLS Connection
-┌───────────────────────────────────▼────────────────────────────────────┐
-│                           DATA STORAGE LAYER                           │
-│     MongoDB Atlas (Document NoSQL) • Motor Async Engine • PyMongo      │
-│  Collections: users, ranks, taxis, queues, operations, manifests, logs │
-└────────────────────────────────────────────────────────────────────────┘
-```
+The production implementation of E-RANK employs a modular, decoupled architecture where each tier is chosen to maximize speed, offline resilience, and high-contrast usability:
 
-- **Frontend:** React 18 with modern functional components, custom hooks, Tailwind CSS dark-slate design system, and Lucide react iconography.
-- **Backend:** FastAPI (Python 3.11) offering asynchronous high-throughput request handling, Pydantic type validation, and automatic Swagger documentation.
-- **Security:** Bcrypt salted password/PIN hashing, JWT bearer tokens, role-based guard middleware.
-- **Reporting Engine:** OpenPyXL automated generation of styled Excel workbooks with formulaic aggregations.
-- **Deployment Platform:** Containerised production deployment hosted on Render cloud infrastructure with SSL encryption.
+| Tier / Architectural Layer | Technology / Framework | Version / Libraries | Core Purpose & Role in E-RANK | Architectural Rationale & Benefit |
+| :--- | :--- | :--- | :--- | :--- |
+| **Frontend Presentation** | React | 18.2.0 | Core Single-Page Application (SPA) client | Component-based state management with zero page reloads for instant UI feedback. |
+| **Styling & Design System** | Tailwind CSS & shadcn/ui | 3.4.1 / Radix UI primitives | High-contrast Dark Navy theme, responsive components | Utility-first styling with accessible, glare-resistant UI tokens (`#0A0D14`, `#10B981`, `#F59E0B`). |
+| **Iconography** | Lucide React | 0.344.0 | Universally recognizable visual glyphs | Ultra-lightweight SVG icons enhancing quick glanceability for drivers and marshals. |
+| **Client Routing & State** | React Router DOM & React Query | 6.22.3 / 5.28.0 | Declarative client routing & asynchronous data cache | Role-based navigation guards (`RoleGuard`) and automatic cache invalidation upon departures. |
+| **Backend REST API** | FastAPI (Python) | 3.11 / 0.110.0 | High-performance asynchronous REST API server | Sub-millisecond ASGI request processing, automatic OpenAPI Swagger documentation (`/docs`). |
+| **Data Validation** | Pydantic v2 | 2.6.4 | Strict payload typing & input schema validation | Eliminates malformed client inputs; validates South African phone numbers and plate formats. |
+| **Cryptographic Security** | Bcrypt & PyJWT | 4.1.2 / 2.8.0 | Salting, password hashing, and tokenized sessions | Industry-standard password hashing (12 rounds) protecting driver PINs and owner credentials. |
+| **Database & Persistence** | MongoDB Atlas | 7.0 (Cloud Engine) | Primary document NoSQL database store | Native JSON-like documents ideal for nested passenger manifests; high-speed queue reordering. |
+| **Database Driver** | PyMongo & Motor | 4.6.2 / 3.3.2 | Asynchronous MongoDB connector for Python | Non-blocking database I/O enabling high concurrent throughput during rank peak hours. |
+| **Spreadsheet Engine** | OpenPyXL | 3.1.2 | Executive Excel (`.xlsx`) generation | Generates styled accounting statements with formulas, headers, and borders without server GUI dependencies. |
+| **Camera & Geolocation** | Browser MediaDevices & Geolocation API | HTML5 W3C Standard | QR scanning & 20m rank geofence validation | 100% web-native; requires zero app store downloads or native APK installations on budget phones. |
+| **Hosting & Cloud Infra** | Render Cloud Platform | Containerized Linux (Web Service) | Production deployment & automated CI/CD pipeline | Automatic GitHub-triggered deployments, zero-downtime rolling updates, and free managed SSL/TLS. |
 
 ---
 
@@ -199,11 +205,35 @@ The live system demonstration video walks through the end-to-end operational lif
 
 ---
 
-## 7. Reflections on Designing for Human Beings
-Engineering software for the South African minibus taxi industry provided invaluable insights into human-centred design:
-- **Respecting Grassroots Operational Hierarchies:** Digital systems cannot succeed if they attempt to bypass existing human authorities. Designing E-RANK around the **taxi marshal** as the central commander was the single most critical factor in achieving operational viability.
-- **Environmental Realities:** High-tech designs fail if they ignore extreme outdoor sunlight, budget smartphone cameras, and cellular network dropouts. Transitioning to high-contrast dark themes (`#0A0D14` with `#FFFFFF` text) and offline data caching proved essential.
-- **Language as a Bridge to Trust:** Incorporating South Africa's official languages transformed user sentiment from apprehension to enthusiastic adoption.
+## 7. Reflections on Designing for Human Beings (Phases 1–4 Journey & Cognitive Load)
+
+Building software for South Africa's minibus taxi industry was not merely an exercise in writing code; it was an intensive journey in **human-centred systems design under extreme environmental, social, and psychological constraints**. Looking across all four phases—from the initial problem definition to final cloud deployment—our team learned that software in public transport must accommodate the human mind under pressure.
+
+### 7.1 Managing Cognitive Load Across Diverse User Personas
+
+#### 1. Minimizing Extraneous Cognitive Load for Rank Marshals
+In Phase 1, we envisioned a digital rank interface that offered dozens of operational controls. However, during our Phase 3 usability testing at Sol Plaatje University (Moroka Room 112), we witnessed how overwhelmed real users become when presented with too many options. A taxi marshal operates in a noisy, fast-moving, and frequently tense environment. They cannot afford to read through dense menus or navigate nested tabs while dozens of passengers and impatient drivers shout questions.
+- **The Design Response:** In Phase 4, we radically reduced the marshal's cognitive burden to **glanceable single-tap interactions**. The queue is presented as large, physical "Loading Bay" cards. Progressing a queue, confirming a departure, or skipping an absent vehicle requires exactly one tap followed by an unambiguous prompt. The cognitive workload shifted from memorizing system workflows to simple binary verifications.
+
+#### 2. Combating Registration Fatigue for Commuters
+In Phase 3, our heuristic evaluation revealed a critical bottleneck: our passenger registration form was a single, long scrolling screen with eight input fields. Participant 2 in our testing session suffered acute cognitive fatigue, remarking that commuters in a rush would simply refuse to use it.
+- **The Design Response:** In Phase 4, we implemented **progressive disclosure**. We partitioned data entry into lightweight steps, provided immediate inline validation for phone numbers, and enabled **self-service QR boarding**. A commuter simply enters a vehicle number plate and their next-of-kin details. By removing redundant questions, task completion dropped from 90 seconds to under 38 seconds.
+
+#### 3. De-Escalating Queue Anxiety for Drivers
+Minibus drivers depend on every single passenger load for their daily livelihood. Under the legacy paper-based system, queue jumping or unrecorded arrivals produced intense suspicion, anxiety, and violent confrontation.
+- **The Design Response:** We designed the Driver Dashboard to provide **absolute cognitive certainty**. The driver sees an unalterable FIFO queue number (e.g. `Position #2 of 7`). When a marshal must skip a vehicle due to a flat tyre or mechanical fault, the driver is not left wondering or suspecting corruption—an immediate high-priority alert card appears on their phone stating the exact operational reason entered by the marshal, accompanied by a *"Got it"* acknowledgment button. Transparency directly neutralized operational panic.
+
+#### 4. Relieving Mental Calculation Stress for Fleet Owners
+Taxi owners historically had to spend hours late at night mentally tallying scribbled cash slips, fuel receipts, and unverified trip claims across several vehicles. This resulted in chronic mental stress and suspicion between owners and drivers.
+- **The Design Response:** In Phase 4, the revenue engine automates every calculation upon the exact second of vehicle departure (`Passengers × Fare`). The owner's cognitive task is transformed from manual auditing to strategic review through automated charts and a one-click executive Excel (`.xlsx`) export with pre-programmed mathematical formulas.
+
+### 7.2 Glanceability, Environmental Realities & Error Prevention
+- **The Sunlight Glare Challenge:** When our initial prototype was tested in bright outdoor conditions, the light-blue and white palette scored a disastrous 3/10 on accessibility. In outdoor rank conditions, users were squinting and missing buttons. Transitioning to a high-contrast Dark Navy theme (`#0A0D14` with `#FFFFFF` and `#10B981` accents) achieved an 18.2:1 contrast ratio that allows drivers and marshals to read screens in direct midday sun without cognitive strain.
+- **Explicit Confirmation with `ResultModal`:** In high-distraction environments, users frequently wonder: *"Did my click actually save?"* If feedback is subtle, users double-click, submit duplicate records, or panic. We introduced prominent confirmation modals (`ResultModal`) featuring bold centered icons and a massive "OK" acknowledgment button, giving users definitive closure after every critical transaction.
+
+### 7.3 What Surprised Us & What We Would Change
+- **What Surprised Us:** The sheer enthusiasm for indigenous languages. When commuters and rank staff saw greetings in isiXhosa (*Molweni*), isiZulu (*Sawubona*), Sesotho (*Dumelang*), and Sepedi (*Thobela*), their posture shifted immediately from skepticism to emotional ownership. Cultural recognition was our greatest tool for digital onboarding.
+- **What We Would Change Based on Retrospective Insight:** If we were to start from Phase 1 again, we would integrate USSD offline fallbacks even earlier in the architecture. While 90% of our test participants had smartphones, rank environments frequently experience dead cellular zones where a lightweight USSD or offline Bluetooth queue token mesh would provide even greater peace of mind.
 
 ---
 
