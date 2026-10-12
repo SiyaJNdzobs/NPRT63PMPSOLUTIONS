@@ -21,7 +21,7 @@
 
 **Lecturer:** Mr Melvin and Dr Silas Verkijika
 
-**Submission Date:** TBC
+**Submission Date:** 12/10/2026
 
 **Live Application:** [eRank](https://erank.onrender.com)
 
