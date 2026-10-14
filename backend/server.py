@@ -48,26 +48,18 @@ async def rank_by_token(token: str):
 # Used in Driver Check-in (T005) to enforce the 20-metre rank geofence boundary.
 # ==============================================================================
 def haversine_m(lat1, lon1, lat2, lon2):
-    # Step 1: Mean Earth radius in metres
     R = 6371000.0
-    # Step 2: Convert latitude degrees from driver and rank into radians
     p1, p2 = math.radians(lat1), math.radians(lat2)
-    # Step 3: Compute angular difference in latitude and longitude
     dphi = math.radians(lat2 - lat1)
     dl = math.radians(lon2 - lon1)
-    # Step 4: Apply Haversine formula to compute great-circle distance on a sphere
     a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    # Step 5: Return actual physical distance in metres
     return 2 * R * math.asin(math.sqrt(a))
 
 
 def make_qr(data: str) -> str:
-    # Step 1: Generate QR code image containing the rank's unique token
     img = qrcode.make(data)
-    # Step 2: Write image into an in-memory byte buffer
     buf = io.BytesIO()
     img.save(buf, format='PNG')
-    # Step 3: Encode as Base64 data URL for instant rendering on the marshal screen
     return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
 
 
@@ -1149,16 +1141,12 @@ async def marshal_save_manifest(body: LongDistanceSaveIn, user=Depends(marshal_d
 # ==============================================================================
 @api.post("/marshal/queue/depart")
 async def marshal_queue_depart(body: MarshalDepartIn, user=Depends(marshal_dep)):
-    # Line A: Sanitize vehicle registration string
     reg = body.registration.strip()
-    
-    # Line B: Look up the taxi in the marshal's specific rank queue
     entry = await db.queue.find_one({'taxi_registration': {'$regex': f'^{reg}$', '$options': 'i'},
                                      'rank_name': user['rank_name']})
     if not entry:
         raise HTTPException(status_code=400, detail="That taxi is not in your queue.")
     
-    # Line C: Retrieve captured long-distance passenger manifest
     long_pax = [p.dict() for p in (body.long_distance_passengers or []) if p.name.strip()]
     if not long_pax and entry.get('long_distance_passengers'):
         long_pax = entry.get('long_distance_passengers')
@@ -1170,33 +1158,22 @@ async def marshal_queue_depart(body: MarshalDepartIn, user=Depends(marshal_dep))
         if req and req.get('passengers'):
             long_pax = req.get('passengers')
 
-    # Line D: Regulatory validation: long-distance taxis must have recorded passengers before departure
     if entry.get('long_distance') and not long_pax:
         raise HTTPException(status_code=400,
                             detail="Capture long-distance passenger details before departing.")
     
-    # Line E: [TRIGGER STEP 1] Calculate trip revenue: (passengers * fare) for long distance, or (capacity * fare) for local
+    # Calculate revenue: (passengers * fare) for long-distance, or (seats * fare) for local
     revenue = entry['fare_amount'] * (len(long_pax) if entry.get('long_distance') and long_pax else entry['seats'])
-    
-    # Line F: [TRIGGER STEP 2] Build permanent financial & trip record document
     op = {'id': str(uuid.uuid4()), 'taxi_registration': entry['taxi_registration'],
           'rank_name': entry['rank_name'], 'owner_name': entry['owner_name'],
           'driver_name': entry['driver_name'], 'route': entry['route'],
           'seats': entry['seats'], 'fare_amount': entry['fare_amount'],
           'revenue': revenue, 'long_distance': entry.get('long_distance', False),
           'long_distance_passengers': long_pax, 'departed_at': now_iso(), 'departed_by': 'marshal'}
-    
-    # Line G: [TRIGGER STEP 3 - INSERT] Save revenue record into operations collection
     await db.operations.insert_one(op)
-    
-    # Line H: [TRIGGER STEP 4 - DELETE] Remove taxi from active queue collection
     await db.queue.delete_one({'id': entry['id']})
-    
-    # Line I: [TRIGGER STEP 5 - UPDATE] Mark vehicle as no longer occupying a queue slot
     await db.taxis.update_one({'registration': entry['taxi_registration']},
                               {'$set': {'active_queue': False}})
-    
-    # Line J: [TRIGGER STEP 6 - UPDATE] Archive pending trip request status to 'departed'
     await db.long_distance_requests.update_many(
         {'taxi_registration': {'$regex': f'^{reg}$', '$options': 'i'}, 'status': 'pending'},
         {'$set': {'status': 'departed', 'passengers': long_pax, 'departed_at': now_iso()}}
@@ -1215,7 +1192,6 @@ async def marshal_queue_skip(body: SkipQueueIn, user=Depends(marshal_dep)):
     reason = body.reason.strip() or "Taxi skipped in queue by rank marshal."
     rank_name = user['rank_name']
 
-    # Step 1: Query queue in strict FIFO order by arrival timestamp (joined_at)
     entries = await db.queue.find({'rank_name': rank_name}, PROJ).sort('joined_at', 1).to_list(500)
     idx = next((i for i, e in enumerate(entries) if e['taxi_registration'].strip().upper() == reg.upper()), None)
     if idx is None:
@@ -1226,7 +1202,6 @@ async def marshal_queue_skip(body: SkipQueueIn, user=Depends(marshal_dep)):
     curr_entry = entries[idx]
     next_entry = entries[idx + 1]
 
-    # Step 2: Swap joined_at timestamps between current taxi and the next taxi
     t_curr = curr_entry['joined_at']
     t_next = next_entry['joined_at']
 
@@ -1235,11 +1210,9 @@ async def marshal_queue_skip(body: SkipQueueIn, user=Depends(marshal_dep)):
         dt = datetime.fromisoformat(t_curr.replace('Z', '+00:00'))
         t_next = (dt + timedelta(seconds=1)).isoformat()
 
-    # Step 3: Atomic database updates for both queue positions
     await db.queue.update_one({'id': curr_entry['id']}, {'$set': {'joined_at': t_next}})
     await db.queue.update_one({'id': next_entry['id']}, {'$set': {'joined_at': t_curr}})
 
-    # Step 4: Dispatch in-app audit notification to the affected driver
     taxi = await db.taxis.find_one({'registration': {'$regex': f'^{reg}$', '$options': 'i'}})
     driver_id = curr_entry.get('driver_id') or (taxi.get('driver_id') if taxi else None)
     notif_doc = {
@@ -1372,17 +1345,15 @@ async def driver_queue(user=Depends(driver_dep)):
 # ==============================================================================
 @api.post("/driver/join")
 async def driver_join(body: JoinIn, user=Depends(driver_dep)):
-    # Line 1: Validate rank QR token against database
     rank = await rank_by_token(body.token)
     if not rank:
         raise HTTPException(status_code=400, detail="This QR code is not valid.")
     
-    # Line 2: Ensure driver has an assigned vehicle
     taxi = await driver_taxi(user)
     if not taxi:
         raise HTTPException(status_code=404, detail="No taxi assigned to you.")
 
-    # Line 3: Check route compatibility (supports dual-rank check for long-distance taxis)
+    # Check route compatibility (supports dual-rank check for long-distance taxis)
     taxi_home_rank = taxi['rank_name']
     scanned_rank = rank['rank_name']
     taxi_is_long_distance = is_long_distance(taxi['route'])
@@ -1403,25 +1374,19 @@ async def driver_join(body: JoinIn, user=Depends(driver_dep)):
 
     joining_rank = scanned_rank
 
-    # Line 4: [GEOFENCE VALIDATION] Check if rank marshal enabled physical 20m geo-check
     if rank.get('geo_check_enabled'):
-        # Step A: Enforce GPS coordinates presence from driver's mobile device
         if body.lat is None or body.lng is None:
             raise HTTPException(status_code=400,
                                 detail="Location sharing is required to join this rank. Please enable GPS and try again.")
-        # Step B: Calculate physical distance between driver phone and rank coordinates
         if rank.get('geo_lat') is not None and rank.get('geo_lng') is not None:
             dist = haversine_m(body.lat, body.lng, rank['geo_lat'], rank['geo_lng'])
-            # Step C: Reject check-in if physical distance exceeds the 20-metre threshold
             if dist > 20:
                 raise HTTPException(status_code=400,
                                     detail="You are not within 20 metres of the rank. Please go to the rank to be able to join the queue.")
     
-    # Line 5: [CONCURRENCY CHECK] Prevent duplicate active queue positions for the same vehicle
     if taxi.get('active_queue'):
         raise HTTPException(status_code=400, detail="Your taxi is already in the queue.")
     
-    # Line 6: Construct queue document with ISO timestamp for strict FIFO queue ordering
     entry = {'id': str(uuid.uuid4()), 'taxi_registration': taxi['registration'],
              'rank_name': joining_rank, 'home_rank_name': taxi_home_rank,
              'driver_id': user['id'],
@@ -1430,11 +1395,8 @@ async def driver_join(body: JoinIn, user=Depends(driver_dep)):
              'fare_amount': taxi['fare_amount'], 'fare_label': taxi['fare_label'],
              'long_distance': taxi_is_long_distance,
              'status': 'waiting', 'joined_at': now_iso(), 'added_by': 'driver'}
-    
-    # Line 7: [DATABASE INSERT] Insert vehicle into the live queue collection
     await db.queue.insert_one(entry)
     
-    # Line 8: If long-distance, create corresponding trip request for passenger manifest tracking
     if taxi_is_long_distance:
         request_doc = {
             'id': str(uuid.uuid4()),
@@ -1450,7 +1412,6 @@ async def driver_join(body: JoinIn, user=Depends(driver_dep)):
         }
         await db.long_distance_requests.insert_one(request_doc)
     
-    # Line 9: [DATABASE UPDATE] Mark taxi as actively queued to block concurrent duplicate entries
     await db.taxis.update_one({'id': taxi['id']}, {'$set': {'active_queue': True}})
     return {'ok': True}
 
@@ -1496,16 +1457,13 @@ async def driver_depart(body: DepartIn, user=Depends(driver_dep)):
 # ==============================================================================
 @api.post("/driver/sos")
 async def driver_sos(user=Depends(driver_dep)):
-    # Line 1: Retrieve driver's assigned vehicle record
     taxi = await driver_taxi(user)
     if not taxi:
         raise HTTPException(status_code=404, detail="No taxi assigned to you.")
     
-    # Line 2: Look up owner account by name to fetch destination email
     owner = await db.users.find_one({'role': 'owner', 'full_name': taxi['owner_name']})
     entry = await db.queue.find_one({'taxi_registration': taxi['registration']}, PROJ)
     
-    # Line 3: [MANIFEST EXTRACTION] Gather passenger manifest from active queue or trip request
     long_pax = []
     if entry and entry.get('long_distance_passengers'):
         long_pax = entry.get('long_distance_passengers')
@@ -1524,7 +1482,6 @@ async def driver_sos(user=Depends(driver_dep)):
         if op and op.get('long_distance_passengers'):
             long_pax = op['long_distance_passengers']
 
-    # Line 4: Prepare the SOS event document with timestamp
     sos_doc = {'id': str(uuid.uuid4()), 'driver_name': user['full_name'],
                'taxi_registration': taxi['registration'], 'rank_name': taxi['rank_name'],
                'owner_name': taxi['owner_name'], 'route': taxi['route'],
@@ -1722,32 +1679,27 @@ async def taxi_get_live_location(registration: str):
 @api.post("/passenger/board")
 async def passenger_board(body: PassengerBoardIn):
     """Allow a passenger to add themselves to a long-distance taxi manifest (no login required)."""
-    # Line 1: Sanitize passenger, next-of-kin, and vehicle registration inputs
     reg = body.registration.strip()
     passenger_name = body.passenger_name.strip()
     kin_name = body.kin_name.strip()
     kin_contact = body.kin_contact.strip()
 
-    # Line 2: Enforce required fields for passenger and next-of-kin safety compliance
     if not passenger_name:
         raise HTTPException(status_code=400, detail="Full name is required.")
     if not kin_name or not kin_contact:
         raise HTTPException(status_code=400, detail="Next of kin name and contact are required.")
 
-    # Line 3: Verify the vehicle exists and is authorized for long-distance travel
     taxi = await db.taxis.find_one({'registration': {'$regex': f'^{reg}$', '$options': 'i'}}, PROJ)
     if not taxi:
         raise HTTPException(status_code=404, detail="Taxi not found. Check the registration number.")
     if not is_long_distance(taxi.get('route', '')):
         raise HTTPException(status_code=400, detail="This taxi is local. Boarding manifest is for long-distance taxis only.")
 
-    # Line 4: Check that the taxi currently holds an active queue position
     entry = await db.queue.find_one({'taxi_registration': {'$regex': f'^{reg}$', '$options': 'i'},
                                      'status': {'$in': ['waiting', 'boarding']}})
     if not entry:
         raise HTTPException(status_code=400, detail="This taxi is not currently in a queue. Please wait for it to join a rank queue before boarding.")
 
-    # Line 5: Construct passenger manifest object with timestamp and next-of-kin contact
     new_passenger = {
         'name': passenger_name,
         'contact': (body.contact or '').strip(),
@@ -1757,18 +1709,15 @@ async def passenger_board(body: PassengerBoardIn):
         'boarded_at': now_iso(),
     }
 
-    # Line 6: [ATOMIC CONCURRENCY - STEP 1] Atomic $push to active queue manifest array
     await db.queue.update_one(
         {'id': entry['id']},
         {'$push': {'long_distance_passengers': new_passenger}}
     )
-    # Line 7: [ATOMIC CONCURRENCY - STEP 2] Atomic $push to persistent trip request
     await db.long_distance_requests.update_many(
         {'taxi_registration': {'$regex': f'^{reg}$', '$options': 'i'}, 'status': 'pending'},
         {'$push': {'passengers': new_passenger}, '$set': {'updated_at': now_iso()}}
     )
 
-    # Line 8: Query updated manifest length to return real-time boarded passenger count
     updated = await db.queue.find_one({'id': entry['id']}, PROJ)
     pax_count = len(updated.get('long_distance_passengers', []))
 
