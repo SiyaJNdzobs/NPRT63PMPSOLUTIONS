@@ -364,7 +364,7 @@ from urllib.parse import quote_plus
 
 
 # ==============================================================================
-# [TEST CASE T001: PUBLIC DISCOVERY & SEARCH]
+# PUBLIC DISCOVERY & SEARCH
 # Unauthenticated endpoint: allows commuters to query ranks, destinations, and fares.
 # Feeds into the frontend Google Maps deep-link for zero-cost navigation.
 # ==============================================================================
@@ -764,7 +764,7 @@ async def owner_replace_driver(registration: str, body: DriverReplaceIn, user=De
 
 
 # ==============================================================================
-# [TEST CASE T009: OWNER REVENUE AGGREGATION & AUDIT EXCEL EXPORT]
+# [SYSTEM FUNCTION: OWNER REVENUE AGGREGATION & AUDIT EXCEL EXPORT]
 # Summarizes earnings across fleet operations and generates a styled Excel statement
 # with dynamic SUM formulas via openpyxl, streamed directly as a binary spreadsheet.
 # ==============================================================================
@@ -1132,7 +1132,7 @@ async def marshal_save_manifest(body: LongDistanceSaveIn, user=Depends(marshal_d
 
 
 # ==============================================================================
-# [TEST CASE T007 & DATABASE TRIGGER: MARSHAL DEPARTURE & REVENUE GENERATION]
+# [SYSTEM FUNCTION & DATABASE TRIGGER: MARSHAL DEPARTURE & REVENUE GENERATION]
 # Reactive Trigger: When a marshal marks a vehicle as departed, this function:
 # 1. Validates that long-distance passenger manifests are captured.
 # 2. Automatically calculates revenue (passengers * tariff).
@@ -1182,7 +1182,7 @@ async def marshal_queue_depart(body: MarshalDepartIn, user=Depends(marshal_dep))
 
 
 # ==============================================================================
-# [TEST CASE T007: MARSHAL QUEUE SKIP / FIFO REORDERING]
+# [SYSTEM FUNCTION: MARSHAL QUEUE SKIP & FIFO REORDERING]
 # Swaps arrival timestamps between adjacent queue positions to reorder vehicles,
 # and issues an automated in-app notification to the driver with the stated reason.
 # ==============================================================================
@@ -1338,7 +1338,7 @@ async def driver_queue(user=Depends(driver_dep)):
 
 
 # ==============================================================================
-# [TEST CASE T005 & GEOFENCE VALIDATION: DRIVER QUEUE CHECK-IN]
+# [SYSTEM FUNCTION & GEOFENCE ENFORCEMENT: DRIVER QUEUE CHECK-IN]
 # Validates driver credentials, route authorization, and physical location.
 # If geo_check is enabled, computes distance using haversine_m() and rejects scans > 20m.
 # Upon successful validation, inserts the driver into the FIFO queue collection.
@@ -1448,7 +1448,7 @@ async def driver_depart(body: DepartIn, user=Depends(driver_dep)):
 
 
 # ==============================================================================
-# [TEST CASE T008 & DATABASE TRIGGER: DRIVER EMERGENCY SOS & DISPATCH]
+# [SYSTEM FUNCTION & DATABASE TRIGGER: DRIVER EMERGENCY SOS & DISPATCH]
 # Reactive Trigger: Upon receiving an SOS distress call from a driver:
 # 1. Finds the assigned taxi and owner contact profile.
 # 2. Queries the complete passenger manifest & next-of-kin emergency numbers.
@@ -1671,7 +1671,7 @@ async def taxi_get_live_location(registration: str):
 
 
 # ==============================================================================
-# [TEST CASE T006 & CONCURRENCY: PASSENGER BOARDING & MANIFEST ATOMIC UPDATE]
+# [SYSTEM FUNCTION & CONCURRENCY: PASSENGER BOARDING & MANIFEST ATOMIC UPDATE]
 # Concurrency & Race Condition Defense:
 # Uses MongoDB atomic operators ($push) to safely append passenger documents
 # to the manifest array without risk of lost updates or race conditions.

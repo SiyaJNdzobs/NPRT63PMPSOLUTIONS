@@ -70,6 +70,11 @@ export default function OwnerDashboard() {
     }
   };
 
+  // ==============================================================================
+  // [SYSTEM FUNCTION: OWNER FLEET REVENUE & EXCEL SPREADSHEET DOWNLOAD]
+  // Fetches aggregated fleet revenues and downloads a server-generated Excel audit
+  // spreadsheet directly as a binary blob without browser memory limits.
+  // ==============================================================================
   const exportXlsx = async () => {
     try {
       const res = await api.get("/owner/revenue/export", { responseType: "blob" });

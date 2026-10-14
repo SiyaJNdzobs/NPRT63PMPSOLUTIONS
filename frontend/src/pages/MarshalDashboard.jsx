@@ -61,6 +61,11 @@ export default function MarshalDashboard() {
     setSkipOpen(true);
   };
 
+  // ==============================================================================
+  // [SYSTEM FUNCTION: MARSHAL QUEUE SKIP & NOTIFICATION]
+  // Requests FIFO queue position swap between unready vehicle and next in line.
+  // Sends audit reason to driver and dispatches /marshal/queue/skip payload.
+  // ==============================================================================
   const submitSkip = async () => {
     if (!skipTaxi) return;
     if (!skipReason.trim()) {
@@ -87,6 +92,11 @@ export default function MarshalDashboard() {
     }
   };
 
+  // ==============================================================================
+  // [SYSTEM FUNCTION: MARSHAL DEPARTURE & REVENUE TRIGGER]
+  // Finalizes queue departure by dispatching /marshal/queue/depart.
+  // Triggers automated backend trip revenue recording and resets queue state.
+  // ==============================================================================
   const runDepart = async (registration, paxList) => {
     try {
       const payload = { registration };

@@ -21,6 +21,11 @@ export default function Landing() {
     api.get("/public/updates").then((r) => setUpdates(r.data)).catch(() => {});
   }, []);
 
+  // ==============================================================================
+  // [SYSTEM FUNCTION: PUBLIC SEARCH & GOOGLE MAPS DEEP-LINK]
+  // Queries active ranks, routes, and tariffs without requiring authentication.
+  // Generates native Google Maps intent deep-links for turn-by-turn directions.
+  // ==============================================================================
   const doSearch = async (e) => {
     e?.preventDefault();
     if (!q.trim()) { setResults(null); return; }

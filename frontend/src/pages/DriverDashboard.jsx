@@ -73,6 +73,11 @@ export default function DriverDashboard() {
     return (m ? m[1] : String(raw)).trim();
   };
 
+  // ==============================================================================
+  // [SYSTEM FUNCTION: DRIVER QR CHECK-IN & GEOFENCE LOCATION SHARING]
+  // Captures rank QR token and requests device GPS coordinates via Geolocation API.
+  // Sends payload to /driver/join where the 20-metre geofence check is evaluated.
+  // ==============================================================================
   const joinWithToken = async (raw) => {
     const tok = extractToken(raw);
     if (!tok) { toast.error("No QR code detected. Try again."); return; }
@@ -125,6 +130,11 @@ export default function DriverDashboard() {
     } finally { setBusy(false); }
   };
 
+  // ==============================================================================
+  // [SYSTEM FUNCTION: DRIVER EMERGENCY SOS DISTRESS TRIGGER]
+  // Initiates high-priority distress broadcast to /driver/sos.
+  // Triggers email dispatch with full passenger manifest to the fleet owner.
+  // ==============================================================================
   const sendSos = async () => {
     setBusy(true);
     try {

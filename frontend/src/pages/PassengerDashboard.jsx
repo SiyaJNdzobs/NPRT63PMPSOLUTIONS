@@ -193,6 +193,11 @@ export default function PassengerDashboard() {
     }
   };
 
+  // ==============================================================================
+  // [SYSTEM FUNCTION: PASSENGER BOARDING & WHATSAPP KIN TRACKING]
+  // Validates passenger manifest entries and submits to /passenger/board.
+  // Generates encrypted next-of-kin live tracking links via WhatsApp URI scheme.
+  // ==============================================================================
   const boardTaxi = async () => {
     const errs = {};
     if (!boardForm.passenger_name.trim()) errs.passenger_name = "Full name is required.";
