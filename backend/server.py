@@ -1461,16 +1461,17 @@ async def driver_sos(user=Depends(driver_dep)):
     if not taxi:
         raise HTTPException(status_code=404, detail="No taxi assigned to you.")
     
-    # Step 1: Case-insensitive name match (handles capitalisation drift)
-    import re as _re
-    owner = await db.users.find_one({'role': 'owner', 'full_name': {'$regex': f"^{_re.escape(taxi['owner_name'].strip())}$", '$options': 'i'}})
-    # Step 2: Fallback — find owner by rank_name (more reliable than name string matching)
+    # Primary: exact match — same logic that was working originally
+    owner = await db.users.find_one({'role': 'owner', 'full_name': taxi.get('owner_name')})
+    # Fallback 1: case-insensitive match in case of capitalisation difference
+    if not owner and taxi.get('owner_name'):
+        import re as _re
+        owner = await db.users.find_one({'role': 'owner', 'full_name': {'$regex': f"^{_re.escape(taxi['owner_name'].strip())}$", '$options': 'i'}})
+    # Fallback 2: find owner by rank_name on the taxi
     if not owner:
-        logger.warning(f"SOS: owner not found by name '{taxi.get('owner_name')}', trying rank_name '{taxi.get('rank_name')}'")
-        owner = await db.users.find_one({'role': 'owner', 'rank_name': taxi['rank_name']})
-    # Step 3: Last resort — find any owner in the system
+        owner = await db.users.find_one({'role': 'owner', 'rank_name': taxi.get('rank_name')})
+    # Fallback 3: last resort — any owner in the system
     if not owner:
-        logger.warning(f"SOS: owner not found by rank_name either, falling back to any owner in system")
         owner = await db.users.find_one({'role': 'owner'})
     entry = await db.queue.find_one({'taxi_registration': taxi['registration']}, PROJ)
     
@@ -1575,19 +1576,30 @@ async def driver_sos(user=Depends(driver_dep)):
             f"</td></tr></table>"
             f"</td></tr></table>"
         )
+        email_fail_reason = None
         try:
             await send_email(to=owner['email'], subject=f"E-RANK SOS \u2013 {taxi['registration']}",
                              html=html)
             email_sent = True
         except Exception as e:
-            logger.error(f"SOS email failed: {e}")
+            email_fail_reason = str(e)
+            logger.error(f"SOS email failed: {type(e).__name__}: {e}")
     sos_doc['email_sent'] = email_sent
     await db.sos_events.insert_one(sos_doc)
+    # Determine why email was not sent
+    if not owner:
+        fail_reason = "owner not found in database"
+    elif not owner.get('email'):
+        fail_reason = f"owner '{owner.get('full_name')}' has no email field in database"
+    elif not email_sent:
+        fail_reason = email_fail_reason or "email service error"
+    else:
+        fail_reason = None
     return {'ok': True, 'email_sent': email_sent,
             'owner_notified': owner['full_name'] if owner else None,
             'owner_email_found': bool(owner and owner.get('email')),
             'taxi_owner_name_stored': taxi.get('owner_name'),
-            'debug': 'owner found' if owner else 'owner NOT found in db'}
+            'fail_reason': fail_reason}
 
 
 # ---------------- passenger ----------------
