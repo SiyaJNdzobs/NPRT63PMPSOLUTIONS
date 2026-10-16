@@ -1461,7 +1461,9 @@ async def driver_sos(user=Depends(driver_dep)):
     if not taxi:
         raise HTTPException(status_code=404, detail="No taxi assigned to you.")
     
-    owner = await db.users.find_one({'role': 'owner', 'full_name': taxi['owner_name']})
+    # Case-insensitive name match — prevents SOS email failing due to capitalisation mismatch between taxi record and user record
+    import re as _re
+    owner = await db.users.find_one({'role': 'owner', 'full_name': {'$regex': f"^{_re.escape(taxi['owner_name'].strip())}$", '$options': 'i'}})
     entry = await db.queue.find_one({'taxi_registration': taxi['registration']}, PROJ)
     
     long_pax = []
